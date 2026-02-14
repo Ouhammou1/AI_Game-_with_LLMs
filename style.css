@@ -1,0 +1,139 @@
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  min-height: 100vh;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  font-family: system-ui, sans-serif;
+  background: linear-gradient(145deg, #020617, #1e1b4b);
+  color: #e5e7eb;
+}
+
+.game-card {
+  width: 360px;
+  padding: 32px;
+  border-radius: 22px;
+  background: rgba(255, 255, 255, 0.06);
+  backdrop-filter: blur(18px);
+  box-shadow: 0 25px 60px rgba(0, 0, 0, 0.7);
+  text-align: center;
+}
+
+h1 {
+  font-size: 1.5rem;
+  margin-bottom: 12px;
+}
+
+.subtext {
+  font-size: 0.8rem;
+  color: #a5b4fc;
+}
+
+.status {
+  margin: 12px 0;
+  min-height: 22px;
+  font-weight: 500;
+}
+
+/* ===== BADGES ===== */
+.badges {
+  display: flex;
+  justify-content: center;
+  gap: 10px;
+  margin: 12px 0;
+}
+
+.badge {
+  padding: 6px 14px;
+  border-radius: 999px;
+  font-size: 0.75rem;
+  background: rgba(255, 255, 255, 0.12);
+}
+
+.badge.ai {
+  background: rgba(99, 102, 241, 0.25);
+}
+
+/* ===== BOARD ===== */
+.board-wrapper {
+  display: flex;
+  justify-content: center;
+  margin: 20px 0;
+}
+
+.board {
+  display: grid;
+  grid-template-columns: repeat(3, 90px);
+  gap: 12px;
+}
+
+/* ===== CELLS ===== */
+.cell {
+  width: 90px;
+  height: 90px;
+  border-radius: 16px;
+  border: none;
+  font-size: 2.3rem;
+  font-weight: 700;
+  background: rgba(255, 255, 255, 0.08);
+  cursor: pointer;
+  transition: transform 0.15s ease, background 0.15s ease;
+}
+
+.cell:hover:not(:disabled) {
+  transform: scale(1.07);
+  background: rgba(255, 255, 255, 0.15);
+}
+
+.cell:disabled {
+  cursor: not-allowed;
+}
+
+/* ===== SYMBOL COLORS ===== */
+.cell.x {
+  color: #38bdf8;
+}
+
+.cell.o {
+  color: #f472b6;
+}
+
+/* ===== ANIMATIONS ===== */
+.cell.pop {
+  animation: pop 0.18s ease-out;
+}
+
+@keyframes pop {
+  0% { transform: scale(0.6); }
+  80% { transform: scale(1.15); }
+  100% { transform: scale(1); }
+}
+
+/* ===== BUTTON ===== */
+.reset-btn {
+  margin-top: 16px;
+  padding: 12px 28px;
+  border-radius: 999px;
+  border: none;
+  font-weight: 600;
+  background: linear-gradient(135deg, #6366f1, #818cf8);
+  color: white;
+  cursor: pointer;
+  transition: all 0.25s ease;
+}
+
+.reset-btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 10px 30px rgba(99, 102, 241, 0.6);
+}
+
+.footer {
+  margin-top: 18px;
+  font-size: 0.7rem;
+  opacity: 0.6;
+}

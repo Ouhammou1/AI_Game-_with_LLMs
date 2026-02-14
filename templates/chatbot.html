@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Game Assistant - Tic-Tac-Toe</title>
+    <link rel="stylesheet" href="/static/chatbot.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+</head>
+<body>
+    <div class="assistant-container">
+        <!-- Header -->
+        <div class="assistant-header">
+            <a href="/" class="header-left">
+                <span class="game-icon">◀</span>
+                <span class="back-text">Back to Game</span>
+            </a>
+            <div class="header-title">
+                <span class="title-icon">◆</span>
+                <h1>Game Strategy Assistant</h1>
+            </div>
+            <a href="/clear-chat" class="header-right">
+                <span class="clear-text">Clear</span>
+                <span class="clear-icon">AI</span>
+            </a>
+        </div>
+
+        <!-- Chat Messages Area -->
+        <div class="chat-area" id="chatArea">
+            {% if messages %}
+                {% for msg in messages %}
+                    <div class="message-group {{ msg.role }}">
+                        <div class="message-avatar">
+                            {% if msg.role == 'bot' %}
+                                <div class="avatar-bot">AI</div>
+                            {% else %}
+                                <div class="avatar-user">You</div>
+                            {% endif %}
+                        </div>
+                        <div class="message-wrapper">
+                            <div class="message-header">
+                                <span class="message-sender">
+                                    {% if msg.role == 'bot' %}Game Coach{% else %}You{% endif %}
+                                </span>
+                                <span class="message-time">{{ msg.time }}</span>
+                            </div>
+                            <div class="message-bubble {{ msg.role }}">
+                                <div class="message-content">{{ msg.content }}</div>
+                            </div>
+                        </div>
+                    </div>
+                {% endfor %}
+            {% else %}
+                <!-- Welcome Message -->
+                <div class="message-group bot">
+                    <div class="message-avatar">
+                        <div class="avatar-bot">AI</div>
+                    </div>
+                    <div class="message-wrapper">
+                        <div class="message-header">
+                            <span class="message-sender">Game Coach</span>
+                            <span class="message-time">Online</span>
+                        </div>
+                        <div class="message-bubble bot">
+                            <div class="message-content">
+                                <p>Ready to improve your Tic-Tac-Toe game?</p>
+                                <p>I'm your AI coach! Ask me anything about:</p>
+                                <ul class="suggestion-list">
+                                    <li>Best first move?</li>
+                                    <li>Winning strategies</li>
+                                    <li>Q-Learning tips</li>
+                                    <li>How to get better</li>
+                                </ul>
+                                <p class="welcome-question">What would you like to learn?</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            {% endif %}
+        </div>
+
+        <!-- Input Area -->
+        <div class="input-container">
+            <form method="POST" class="input-form">
+                <div class="input-wrapper">
+                    <input type="text" 
+                           name="message" 
+                           class="message-input"
+                           placeholder="Ask your game coach..." 
+                           required 
+                           autocomplete="off">
+                    <button type="submit" class="send-button">
+                        <span class="send-icon">→</span>
+                        Send
+                    </button>
+                </div>
+            </form>
+            <div class="input-hint">
+                <span class="hint-icon">●</span>
+                Create by BRAHIM
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Auto-scroll to bottom
+        const chatArea = document.getElementById('chatArea');
+        if (chatArea) {
+            chatArea.scrollTop = chatArea.scrollHeight;
+        }
+    </script>
+</body>
+</html>

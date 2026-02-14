@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Q-Learning Tic-Tac-Toe</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+  <div class="game-card">
+    <h1>Q-Learning Tic-Tac-Toe</h1>
+
+    <div class="badges">
+      <span class="badge">Player: X</span>
+      <span class="badge ai">AI: O</span>
+    </div>
+
+    <p id="trainingStatus" class="subtext">Loading AI model…</p>
+    <p id="status" class="status">Please wait…</p>
+
+    <div class="board-wrapper">
+      <div class="board" id="board"></div>
+    </div>
+
+    <button class="reset-btn" onclick="resetGame()">New Game</button>
+
+    <!-- ONLY THIS PART IS ADDED - Chatbot Button -->
+    <div style="margin-top: 20px; text-align: center;">
+      <a href="/chatbot" style="
+        display: inline-block;
+        padding: 8px 20px;
+        background: rgba(16, 163, 127, 0.2);
+        color: #10a37f;
+        text-decoration: none;
+        border-radius: 30px;
+        font-size: 0.9rem;
+        border: 1px solid rgba(16, 163, 127, 0.3);
+        transition: all 0.25s ease;
+      " onmouseover="this.style.background='rgba(16, 163, 127, 0.3)';this.style.transform='translateY(-2px)'" 
+         onmouseout="this.style.background='rgba(16, 163, 127, 0.2)';this.style.transform='translateY(0)'">
+        🤖 Ask AI Assistant
+      </a>
+    </div>
+    <!-- END OF ADDED PART -->
+
+    <p class="footer">
+      Reinforcement Learning • Q-Learning • Python + JavaScript
+    </p>
+  </div>
+
+  <script src="script.js"></script>
+</body>
+</html>
