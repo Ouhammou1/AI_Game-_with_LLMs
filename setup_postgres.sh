@@ -1,45 +1,26 @@
 #!/bin/bash
+set -e
 
-echo "=================================================="
-echo "🐳 Setting up PostgreSQL Docker container"
-echo "=================================================="
+echo "🚀 Running database setup..."
 
-# Load variables from .env file
-if [ -f .env ]; then
-    export $(grep -v '^#' .env | xargs)
-else
-    echo "❌ .env file not found!"
-    exit 1
-fi
+psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" <<EOF
 
-# Stop and remove old container if exists
-docker rm -f "$CONTAINER_NAME" 2>/dev/null
+CREATE TABLE IF NOT EXISTS chat_sessions (
+    id SERIAL PRIMARY KEY,
+    session_id VARCHAR(50) UNIQUE NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    message_count INTEGER DEFAULT 0
+);
 
-# Remove old data (optional, only if you want a fresh DB)
-if [ -d "$DATA_DIR" ]; then
-    echo "Removing old Postgres data at $DATA_DIR..."
-    rm -rf "$DATA_DIR"/*
-fi
+CREATE TABLE IF NOT EXISTS messages (
+    id SERIAL PRIMARY KEY,
+    session_id VARCHAR(50) NOT NULL,
+    role VARCHAR(10) NOT NULL,
+    content TEXT NOT NULL,
+    timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
 
-# Create data directory if it does not exist
-mkdir -p "$DATA_DIR"
+EOF
 
-# Run Postgres container
-docker run -d \
-  --name "$CONTAINER_NAME" \
-  -e POSTGRES_USER="$POSTGRES_USER" \
-  -e POSTGRES_PASSWORD="$POSTGRES_PASSWORD" \
-  -e POSTGRES_DB="$POSTGRES_DB" \
-  -p 5432:5432 \
-  -v "$DATA_DIR":/var/lib/postgresql/data \
-  --health-cmd="pg_isready -U $POSTGRES_USER" \
-  --health-interval=5s \
-  --health-timeout=3s \
-  --health-retries=10 \
-  postgres:15-alpine
-
-echo "✅ PostgreSQL container '$CONTAINER_NAME' is running!"
-echo "User: $POSTGRES_USER"
-echo "Password: $POSTGRES_PASSWORD"
-echo "Database: $POSTGRES_DB"
-echo "Connect via: postgresql://$POSTGRES_USER:$POSTGRES_PASSWORD@localhost:5432/$POSTGRES_DB"
+echo "✅ Database initialized!"

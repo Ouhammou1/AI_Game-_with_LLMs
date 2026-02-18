@@ -1,15 +1,7 @@
-FROM debian:12
+FROM postgres:15
 
-RUN apt-get update && \
-    apt-get install -y \
-        bash \
-        postgresql-client \
-    && rm -rf /var/lib/apt/lists/*
+# Copy initialization script
+COPY setup_postgres.sh /docker-entrypoint-initdb.d/
 
-WORKDIR /app
-
-COPY . .
-
-RUN chmod 777 setup_postgres.sh
-
-CMD ["./setup_postgres.sh"]
+# Make it executable
+RUN chmod +x /docker-entrypoint-initdb.d/setup_postgres.sh
