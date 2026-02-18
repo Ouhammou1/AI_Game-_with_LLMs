@@ -1,193 +1,75 @@
-import random
-import json
+from flask import Flask, render_template, redirect, url_for, send_from_directory
+from flask_cors import CORS
+from datetime import datetime
+import os
 
-EPSILON=0.2
-TRAINING_GAMES=800000
+app = Flask(__name__)
+CORS(app)
 
-q_table={}
+# Store chat history in memory
+chat_history = []
 
+# Get the absolute path of the current directory
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
-def get_board():
-    return [''] * 9
+# Serve q_table.json
+@app.route('/q_table.json')
+def serve_qtable():
+    try:
+        return send_from_directory(BASE_DIR, 'q_table.json')
+    except Exception as e:
+        return {'error': 'q_table.json not found'}, 404
 
-def     get_state(board):
-    state=""
-    for cell in board:
-        if cell:
-            state+=cell
-        else:
-            state +="-"
-    return state
+# ===== CHATBOT ROUTES =====
+@app.route('/')
+def home():
+    return redirect(url_for('game'))
 
-
-def get_available_state(board):
-    empty_cells=[]
-    for i ,cell in enumerate(board):
-        if cell == '':
-            empty_cells.append(i)
-    return empty_cells
-
-
-def init_q_state(state):
-    if state not in q_table:
-        q_table[state] = {}
-        for i in range(9):
-            q_table[state][str(i)] = 0.0
-
-def choose_action(state , board):
-    init_q_state(state)
-
-    available = get_available_state(board)
-    if random.random() < EPSILON:
-            return random.choice(available)
-
-
-def     play_training_game():
-    board = get_board()
-    moves=[]
-    palyer='X'
-
-    while True:
-        state =     get_state(board)
-        available  = get_available_state(board)
-
-        if not available:
-            break
+@app.route('/chatbot', methods=['GET', 'POST'])
+def chatbot():
+    if request.method == 'POST':
+        user_message = request.form.get('message', '')
+        if user_message:
+            chat_history.append({
+                'role': 'user',
+                'content': user_message,
+                'time': datetime.now().strftime('%H:%M')
+            })
+            
+            # Simple responses (not AI, just predefined)
+            responses = {
+                'minimax': 'To implement Minimax algorithm: evaluate all possible board states recursively, return scores for winning/losing positions, use alpha-beta pruning to optimize.',
+                'tic': 'Tic-Tac-Toe is a perfect information game. The optimal strategy is to take the center, then corners.',
+                'algorithm': 'Alpha-Beta pruning reduces the minimax search space by eliminating branches that cannot affect the final decision.',
+                'optimization': 'To optimize game AI: memoize board states, reduce search depth, use heuristic evaluation functions.',
+                'hello': 'Hello! How can I help with your game today?',
+                'hi': 'Hi there! Ask me about game development!',
+            }
+            
+            response = "I'm your game assistant! Ask me about minimax, algorithms, or Tic-Tac-Toe."
+            for key, value in responses.items():
+                if key in user_message.lower():
+                    response = value
+                    break
+            
+            chat_history.append({
+                'role': 'bot',
+                'content': response,
+                'time': datetime.now().strftime('%H:%M')
+            })
         
-        action = choose_action(state , board)
-
-
-
-
-
-
-def    train():
-    print(f"Training AI for {TRAINING_GAMES} games...")
-
-    for game in range(1 , TRAINING_GAMES +1):
-        play_training_game()
-
-
-
-
-
-
-if __name__ == "__main__":
-    print("=" * 50)
-    print("Tic-Tac-Toe Q-Learning Trainer")
-    print("=" * 50)
-    print("\n\n")
-
-    train()
+        return render_template('chatbot.html', messages=chat_history)
     
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-# import random
-# import json
-
-# def empty_board():
-#     return [0] * 9
-
-# WIN_COMBOS = [
-#     (0,1,2), (3,4,5), (6,7,8),
-#     (0,3,6), (1,4,7), (2,5,8),
-#     (0,4,8), (2,4,6)
-# ]
-
-# def check_winner(board):
-#     for a , b , c in WIN_COMBOS:
-#         if board[a] == board[b] == board[c] != 0:
-#             return board[a]
-    
-#     if 0 not in board:
-#         return 0
-#     return None
-
-
-
-
-# Q = {}
-
-# alpha = 0.1
-# gamma = 0.9
-# epsilon = 0.2
-
-
-# def state_to_tuple(board):
-#     return tuple(board)
-
-# def available_actions(board):
-#     actions = []
-#     for i in range(len(board)):
-#         if board[i] == 0:
-#             actions.append(i)
-#     return actions
-
-# def choose_action(board):
-#     state = state_to_tuple(board)
-#     actions = available_actions(board)
-
-
-#     if random.random() < epsilon:
-#         return random.choice(actions)
-#     q_values = []
-    
-
-
-# board = [1, 1, 1,
-#          0, -1, 0,
-#          -1, 0, 0]
-
-# if __name__ == "__main__":
-#     # print(check_winner(board=board))
-#     print(f"board = {board}")
-#     print(f"tuple = {state_to_tuple(board=board)}")
-#     print(f"available actions = {available_actions(board)}")
-
-
+    return render_template('chatbot.html', messages=chat_history)
+
+@app.route('/clear-chat')
+def clear_chat():
+    chat_history.clear()
+    return redirect(url_for('chatbot'))
+
+@app.route('/game')
+def game():
+    return render_template('game.html')
+
+if __name__ == '__main__':
+    app.run(debug=True, port=5001)

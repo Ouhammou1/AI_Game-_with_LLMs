@@ -1,15 +1,17 @@
 services:
   postgres:
-    image: postgres:15-alpine
-    container_name: chatbot_postgres
-    env_file:
-      - .env   # or .enc if you named it that
+    build: .
+    container_name: game-postgres
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: postgres
     ports:
-      - "5432:5432"
+      - "5433:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U $POSTGRES_USER"]
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
       interval: 5s
       timeout: 3s
       retries: 10

@@ -1,8 +1,14 @@
-# Database Configuration
-DB_HOST = "localhost"
-DB_PORT = "5432"
-DB_NAME = "chatbot_db"
-DB_USER = "BRAHIM"
-DB_PASS = "0000"
+import os
+from dotenv import load_dotenv
 
-DATABASE_URL = "postgresql://{0}:{1}@{2}:{3}/{4}?sslmode=disable&gssencmode=disable".format(DB_USER, DB_PASS, DB_HOST, DB_PORT, DB_NAME)
+load_dotenv()
+
+class Config:
+    SECRET_KEY = os.environ.get('SECRET_KEY') or 'dev-secret-key'
+    
+    # Database configuration
+    DB_HOST = os.environ.get('DB_HOST') or 'localhost'
+    DB_PORT = os.environ.get('DB_PORT') or '5433'
+    DB_NAME = os.environ.get('DB_NAME') or 'postgres'
+    DB_USER = os.environ.get('DB_USER') or 'postgres'
+    DB_PASSWORD = os.environ.get('DB_PASSWORD') or 'postgres'
