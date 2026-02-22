@@ -1,6 +1,22 @@
+version: "3.9"
+
 services:
-  postgres:
+  app:
     build: .
+    container_name: game-app
+    ports:
+      - "5000:5000"
+    env_file:
+      - .env
+    depends_on:
+      - postgres
+    volumes:
+      - .:/app
+    command: python app.py
+
+  postgres:
+    image: postgres:15
+    restart: unless-stopped
     container_name: game-postgres
     environment:
       POSTGRES_USER: postgres
@@ -10,11 +26,8 @@ services:
       - "5433:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres"]
-      interval: 5s
-      timeout: 3s
-      retries: 10
+
+
 
 volumes:
   postgres_data:
