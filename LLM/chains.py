@@ -1,59 +1,58 @@
+from langchain_core.messages import HumanMessage, AIMessage
+from .llm_config import get_llm, get_system_message
+from .rate_limiter import check_rate_limit
+from .rate_limiter import set_processing
+from .error_handler import handle_error
+from .streaming import stream_response
+from .timeout import run_with_timeout
 
-import os
-from dotenv import load_dotenv
-from langchain_google_genai import ChatGoogleGenerativeAI
-from langchain_core.messages import HumanMessage, SystemMessage, AIMessage
-from langchain_core.prompts import ChatPromptTemplate
+llm = get_llm()
+conversation_history = [get_system_message()]
 
-load_dotenv()
-
-llm = ChatGoogleGenerativeAI(
-    model="gemini-2.5-flash",
-    temperature=0.7,
-    google_api_key=os.getenv("GOOGLE_API_KEY"),
-    streaming=True
-)
-
-conversation_history = [
-    SystemMessage(content="You are a helpful assistant that answers clearly and concisely.")
-]
-
-prompt = ChatPromptTemplate.from_messages([
-    ("system", "You are an expert in {topic}. Answer in {language}."),
-    ("human", "{question}")
-])
-chain = prompt | llm
+print(conversation_history)
 
 
-def ask_llm_simple(message: str) -> str:
-    response = llm.invoke(message)
-    return response.content
+def ask_llm(message):
+    try:
+        check_rate_limit()
+        set_processing(True)
+
+        conversation_history.append(HumanMessage(content=message))
+
+        response = run_with_timeout(
+            llm.invoke,
+            15,
+            conversation_history
+        )
+
+        conversation_history.append(
+            AIMessage(content=response.content)
+        )
+
+        return response.content
+
+    except Exception as e:
+        conversation_history.clear() #m
+        return handle_error(e)
+    
+    finally:
+        set_processing(False)
 
 
-def ask_llm_with_system(message: str) -> str:
-    messages = [
-        SystemMessage(content="You are a helpful assistant that answers clearly and concisely."),
-        HumanMessage(content=message)
-    ]
-    response = llm.invoke(messages)
-    return response.content
+
+def ask_llm_stream(message):
+    try:
+        check_rate_limit()
+        set_processing(True)
+    except Exception as e:
+        def error_gen():
+            yield handle_error(e)
+        return error_gen()
+
+    return stream_response(llm, conversation_history, message)
 
 
-def ask_llm(message: str) -> str:
-    conversation_history.append(HumanMessage(content=message))
-    response = llm.invoke(conversation_history)
-    conversation_history.append(AIMessage(content=response.content))
-    return response.content
 
-
-def ask_llm_template(question: str, topic="programming", language="English") -> str:
-    response = chain.invoke({
-        "topic": topic,
-        "language": language,
-        "question": question
-    })
-    return response.content
-
-def ask_ll_stream(message: str):
-    for chunk in llm.stream(message):
-        yield chunk.content
+def reset_chat():
+    global conversation_history
+    conversation_history = [get_system_message()]

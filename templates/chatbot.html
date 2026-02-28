@@ -19,7 +19,7 @@
                 <span class="title-icon">◆</span>
                 <h1>Game Strategy Assistant</h1>
             </div>
-            <a href="/clear-chat" class="header-right">
+            <a href="/chatbot" onclick="clearChat(event)" class="header-right">
                 <span class="clear-text">Clear</span>
                 <span class="clear-icon">AI</span>
             </a>
@@ -45,7 +45,7 @@
                                 <span class="message-time">{{ msg.time }}</span>
                             </div>
                             <div class="message-bubble {{ msg.role }}">
-                                <div class="message-content">{{ msg.content }}</div>
+                                <div class="message-content">{{ msg.content | safe }}</div>
                             </div>
                         </div>
                     </div>
@@ -63,15 +63,15 @@
                         </div>
                         <div class="message-bubble bot">
                             <div class="message-content">
-                                <p>Ready to improve your Tic-Tac-Toe game?</p>
-                                <p>I'm your AI coach! Ask me anything about:</p>
+                                <p>Good to see you again </p>
+                                <!-- <p>I'm your AI coach! Ask me anything about:</p>
                                 <ul class="suggestion-list">
                                     <li>Best first move?</li>
                                     <li>Winning strategies</li>
                                     <li>Q-Learning tips</li>
                                     <li>How to get better</li>
                                 </ul>
-                                <p class="welcome-question">What would you like to learn?</p>
+                                <p class="welcome-question">What would you like to learn?</p> -->
                             </div>
                         </div>
                     </div>
@@ -81,20 +81,19 @@
 
         <!-- Input Area -->
         <div class="input-container">
-            <form method="POST" action="/chatbot" class="input-form">
+            <div class="input-form">
                 <div class="input-wrapper">
-                    <input type="text" 
-                           name="message" 
+                    <input type="text"
+                           id="messageInput"
                            class="message-input"
-                           placeholder="Ask your game coach..." 
-                           required 
+                           placeholder="Ask your game coach..."
                            autocomplete="off">
-                    <button type="submit" class="send-button">
+                    <button onclick="sendMessage()" class="send-button">
                         <span class="send-icon">→</span>
                         Send
                     </button>
                 </div>
-            </form>
+            </div>
             <div class="input-hint">
                 <span class="hint-icon">●</span>
                 Create by BRAHIM
@@ -103,10 +102,143 @@
     </div>
 
     <script>
-        // Auto-scroll to bottom
         const chatArea = document.getElementById('chatArea');
-        if (chatArea) {
+
+        // Auto-scroll to bottom on load
+        chatArea.scrollTop = chatArea.scrollHeight;
+
+        // Enter key support
+        document.getElementById('messageInput').addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') sendMessage();
+        });
+
+        function getCurrentTime() {
+            const now = new Date();
+            return now.getHours().toString().padStart(2, '0') + ':' + now.getMinutes().toString().padStart(2, '0');
+        }
+
+        function addMessage(role, content) {
+            const id = 'msg-' + Date.now();
+            const time = getCurrentTime();
+            chatArea.innerHTML += `
+                <div class="message-group ${role}">
+                    <div class="message-avatar">
+                        <div class="avatar-${role}">${role === 'bot' ? 'AI' : 'You'}</div>
+                    </div>
+                    <div class="message-wrapper">
+                        <div class="message-header">
+                            <span class="message-sender">${role === 'bot' ? 'Game Coach' : 'You'}</span>
+                            <span class="message-time">${time}</span>
+                        </div>
+                        <div class="message-bubble ${role}">
+                            <div class="message-content" id="${id}">${content}</div>
+                        </div>
+                    </div>
+                </div>`;
             chatArea.scrollTop = chatArea.scrollHeight;
+            return id;
+        }
+
+        function typeWriter(elementId, text, speed = 15, onDone = null) {
+        const el = document.getElementById(elementId);
+        el.innerHTML = '';
+        const parts = text.split(/(<[^>]*>)/);
+        let chars = [];
+        parts.forEach(part => {
+            if (part.match(/^<[^>]*>$/)) {
+                chars.push(part);
+            } else {
+                chars.push(...part.split(''));
+            }
+        });
+
+        let i = 0;
+        function type() {
+            if (i < chars.length) {
+                el.innerHTML += chars[i];
+                i++;
+                chatArea.scrollTop = chatArea.scrollHeight;
+                const delay = chars[i - 1].startsWith('<') ? 0 : speed;
+                setTimeout(type, delay);
+            } else {
+                if (onDone) onDone();  // ← استدعي الـ callback هنا
+            }
+        }
+        type();
+    }
+
+
+    async function sendMessage() {
+    const input = document.getElementById('messageInput');
+    const sendBtn = document.querySelector('.send-button'); 
+    const message = input.value.trim();
+    if (!message) return;
+    input.value = '';
+
+
+    input.disabled = true;
+    sendBtn.disabled = true;
+
+    addMessage('user', message);
+    const botId = addMessage('bot', '▋');
+
+    const formData = new FormData();
+    formData.append('message', message);
+    formData.append('action', 'chat');
+
+    try {
+        const response = await fetch('/chatbot', {
+            method: 'POST',
+            body: formData
+        });
+
+        const html = await response.text();
+        const parser = new DOMParser();
+        const doc = parser.parseFromString(html, 'text/html');
+        const allMessages = doc.querySelectorAll('.message-content');
+        const lastBot = allMessages[allMessages.length - 1];
+
+        if (lastBot) {
+        
+            typeWriter(botId, lastBot.innerHTML, 15, () => {
+                input.disabled = false;
+                sendBtn.disabled = false;  
+                input.focus();
+            });
+        } else {
+            document.getElementById(botId).innerHTML = '⚠️ No response received.';
+            input.disabled = false;
+            sendBtn.disabled = false;
+        }
+
+    } catch(e) {
+        document.getElementById(botId).innerHTML = '⚠️ Error. Please try again.';
+        input.disabled = false;
+        sendBtn.disabled = false;
+    }
+}
+
+        async function clearChat(e) {
+            e.preventDefault();
+            const formData = new FormData();
+            formData.append('action', 'clear');
+            await fetch('/chatbot', { method: 'POST', body: formData });
+            // Clear UI
+            chatArea.innerHTML = `
+                <div class="message-group bot">
+                    <div class="message-avatar"><div class="avatar-bot">AI</div></div>
+                    <div class="message-wrapper">
+                        <div class="message-header">
+                            <span class="message-sender">Game Coach</span>
+                            <span class="message-time">Online</span>
+                        </div>
+                        <div class="message-bubble bot">
+                            <div class="message-content">
+                                <p>Good to see you again</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>`;
         }
     </script>
 </body>

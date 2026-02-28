@@ -19,6 +19,7 @@ clean:
 	@echo "🧹 Cleaning containers & volumes..."
 	$(DC) down -v
 	docker system prune -f
+	@rm -rf /Users/bouhammo/data/*
 
 logs:
 	$(DC) logs -f

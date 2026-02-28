@@ -1,3 +1,0 @@
-docker exec -it chatbot_postgres psql -U BRAHIM -d chatbot_db
-
-        docker exec -it chatbot_postgres psql -U BRAHIM -d chatbot_db

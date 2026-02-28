@@ -51,19 +51,19 @@ function handleCellClick(index) {
   updateBoard();
 
   if (checkWinner('X')) {
-    endGame('You win');
+    endGame('You win! 🎉');
     return;
   }
 
   if (board.every(c => c !== '')) {
-    endGame('Draw');
+    endGame('Draw! 🤝');
     return;
   }
 
   currentPlayer = 'O';
   document.getElementById('status').textContent = 'AI is thinking…';
 
-  setTimeout(aiMove, 300);
+  setTimeout(aiMove, 400);
 }
 
 function aiMove() {
@@ -77,12 +77,12 @@ function aiMove() {
   updateBoard();
 
   if (checkWinner('O')) {
-    endGame('AI wins');
+    endGame('AI wins! 🤖');
     return;
   }
 
   if (board.every(c => c !== '')) {
-    endGame('Draw');
+    endGame('Draw! 🤝');
     return;
   }
 
@@ -107,7 +107,7 @@ function endGame(message) {
 }
 
 // ================================
-// AI (STRICT Q-TABLE INFERENCE)
+// AI (Q-TABLE INFERENCE)
 // ================================
 function getState(b) {
   return b.map(c => c || '-').join('');
@@ -121,16 +121,18 @@ function getAIMove(b) {
   const state = getState(b);
   const available = getAvailableActions(b);
 
+  // Fallback: random move if state not found
   if (!qTable[state]) {
-    throw new Error('State not found in Q-table');
+    console.warn('State not found in Q-table, picking random:', state);
+    return available[Math.floor(Math.random() * available.length)];
   }
 
   let bestAction = available[0];
-  let bestValue = qTable[state][bestAction];
+  let bestValue = -Infinity;
 
   for (const action of available) {
-    const value = qTable[state][action];
-    if (value > bestValue) {
+    const value = qTable[state][String(action)]; // ✅ STRING key matches q_table.json
+    if (value !== undefined && value > bestValue) {
       bestValue = value;
       bestAction = action;
     }
@@ -153,27 +155,20 @@ function checkWinner(player) {
 }
 
 // ================================
-// LOAD Q-TABLE (FIXED PATH)
+// LOAD Q-TABLE (NO KEY CONVERSION NEEDED)
 // ================================
 function loadPythonAI() {
   document.getElementById('trainingStatus').textContent = 'Loading AI model…';
   document.getElementById('status').textContent = 'Please wait…';
   gameActive = false;
 
-  // FIXED: Added leading slash to fetch from root
   fetch('/q_table.json')
     .then(res => {
       if (!res.ok) throw new Error('q_table.json missing');
       return res.json();
     })
     .then(data => {
-      qTable = {};
-      for (const state in data) {
-        qTable[state] = {};
-        for (const action in data[state]) {
-          qTable[state][parseInt(action)] = data[state][action];
-        }
-      }
+      qTable = data; // ✅ Use directly — keys are already strings
 
       modelLoaded = true;
       document.getElementById('trainingStatus').textContent =
@@ -185,10 +180,8 @@ function loadPythonAI() {
       modelLoaded = false;
       gameActive = false;
 
-      document.getElementById('trainingStatus').textContent =
-        'AI model not found';
-      document.getElementById('status').textContent =
-        'Run train.py to generate q_table.json';
+      document.getElementById('trainingStatus').textContent = 'AI model not found';
+      document.getElementById('status').textContent = 'Run train.py to generate q_table.json';
 
       console.error('FATAL:', err);
     });
