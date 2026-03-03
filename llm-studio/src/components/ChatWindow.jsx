@@ -1,13 +1,13 @@
 import React, { useState, useRef, useEffect } from 'react'
 import './ChatWindow.css'
 
-function ChatWindow() {
-  const [messages, setMessages] = useState([])
+function ChatWindow({ onFirstMessage, initialMessages = [] }) {
+  const [messages, setMessages] = useState(initialMessages)
   const [input, setInput] = useState('')
   const [loading, setLoading] = useState(false)
+  const hasSentFirst = useRef(initialMessages.length > 0)
   const messagesEndRef = useRef(null)
 
-  // Auto-scroll to bottom when new messages appear
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages, loading])
@@ -17,6 +17,12 @@ function ChatWindow() {
 
     const userMsg = { role: 'user', text: input }
     setMessages(prev => [...prev, userMsg])
+
+    if (!hasSentFirst.current && onFirstMessage) {
+      onFirstMessage(input)
+      hasSentFirst.current = true
+    }
+
     setInput('')
     setLoading(true)
 
@@ -45,22 +51,12 @@ function ChatWindow() {
     }
   }
 
-  const handleClear = async () => {
-    try {
-      await fetch('http://localhost:5000/api/clear', { method: 'POST' })
-    } catch (error) {
-      console.log('Could not clear server history')
-    }
-    setMessages([])
-  }
-
   return (
     <div className="chat-window">
-      {/* Messages */}
       <div className="chat-messages">
-        <div className="system-prompt">
+        {/* <div className="system-prompt">
           <span>System: You are an expert AI game developer specializing in Minimax algorithms.</span>
-        </div>
+        </div> */}
 
         {messages.length === 0 && !loading && (
           <div className="empty-chat">
@@ -94,15 +90,7 @@ function ChatWindow() {
         <div ref={messagesEndRef} />
       </div>
 
-      {/* Bottom input area */}
       <div className="chat-input-area">
-        <div className="input-toolbar">
-          <button className="toolbar-btn" title="Attach file">📎</button>
-          <button className="toolbar-btn" title="Voice">🎤</button>
-          <span className="toolbar-divider"></span>
-          <span className="toolbar-config">Config: <span className="config-value">Temp 0.7</span></span>
-          <button className="toolbar-btn clear-btn" onClick={handleClear} title="Clear chat">🗑️</button>
-        </div>
         <div className="input-wrapper">
           <textarea
             placeholder="Ask the AI about game logic, strategy, or code..."

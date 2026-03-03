@@ -127,3 +127,9 @@
     cursor: pointer;
   }
   
+.session-empty {
+    color: #64748b;
+    font-size: 12px;
+    text-align: center;
+    padding: 20px 0;
+}

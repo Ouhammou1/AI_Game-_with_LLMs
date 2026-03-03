@@ -194,3 +194,16 @@ DB_USER=BRAHIM
 DB_PASSWORD=0000
 GROQ_API_KEY=your_groq_api_key
 ```◊
+
+
+
+
+
+
+
+
+```bash
+cd llm-studio && npm run build && cd ..
+cp -r llm-studio/dist/* static/llm-studio/
+docker-compose up
+```

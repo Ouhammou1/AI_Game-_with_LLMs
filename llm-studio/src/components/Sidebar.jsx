@@ -1,10 +1,9 @@
 import React from 'react'
-import '../index.css'
+import './Sidebar.css'
 
-function Sidebar() {
+function Sidebar({ onNewChat, sessions, activeSession, onSelectSession }) {
   return (
     <aside className="sidebar">
-      {/* Logo area */}
       <div className="sidebar-logo">
         <div className="logo-icon">LLM</div>
         <div>
@@ -13,38 +12,30 @@ function Sidebar() {
         </div>
       </div>
 
-      {/* New session button */}
-      <button className="new-session-btn">
+      <button className="new-session-btn" onClick={onNewChat}>
         + New Chat
       </button>
 
-      {/* Session list */}
       <div className="session-list">
-        <p className="session-label">TODAY</p>
-        <div className="session-item active">
-          📄 Minimax Algorithm Optimi...
-        </div>
-        <div className="session-item">
-          &lt;/&gt; Win Condition Check (Pytho...
-        </div>
-        <div className="session-item">
-          🤖 Opponent Taunt Generation
-        </div>
+        {sessions.length === 0 && (
+          <p className="session-empty">No chats yet</p>
+        )}
 
-        <p className="session-label">YESTERDAY</p>
-        <div className="session-item">
-          ⚙️ Game Loop Debugging
-        </div>
-        <div className="session-item">
-          📊 Analyze Player X patterns
-        </div>
+        {sessions.map(session => (
+          <div
+            key={session.session_id}
+            className={`session-item ${session.session_id === activeSession ? 'active' : ''}`}
+            onClick={() => onSelectSession(session.session_id)}
+          >
+            💬 {session.title}
+          </div>
+        ))}
       </div>
 
-      {/* User area at bottom */}
       <div className="sidebar-user">
         <div className="user-avatar">A</div>
         <div>
-          <p className="user-name">BRAHIM </p>
+          <p className="user-name">BRAHIM</p>
           <span className="user-plan">Pro Plan</span>
         </div>
         <span className="user-settings">⚙️</span>

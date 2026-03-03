@@ -27,7 +27,7 @@
 }
 
 /* ---- System Prompt ---- */
-.system-prompt {
+/* .system-prompt {
   align-self: center;
   background: #151b2e;
   border: 1px solid #1e293b;
@@ -36,7 +36,7 @@
   font-size: 12px;
   color: #94a3b8;
   font-family: 'JetBrains Mono', 'Fira Code', monospace;
-}
+} */
 
 /* ---- Message Row ---- */
 .message {
@@ -149,39 +149,6 @@
   border-top: 1px solid #1e293b;
 }
 
-/* ---- Toolbar ---- */
-.input-toolbar {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin-bottom: 8px;
-}
-
-.toolbar-btn {
-  background: none;
-  border: none;
-  font-size: 16px;
-  cursor: pointer;
-  padding: 4px 6px;
-  border-radius: 6px;
-  color: #94a3b8;
-}
-
-.toolbar-btn:hover {
-  background: #1a2138;
-}
-
-.toolbar-divider {
-  width: 1px;
-  height: 16px;
-  background: #1e293b;
-  margin: 0 4px;
-}
-
-.toolbar-config {
-  font-size: 12px;
-  color: #64748b;
-}
 
 .config-value {
   color: #3b82f6;

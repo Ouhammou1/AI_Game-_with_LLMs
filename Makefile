@@ -7,8 +7,9 @@ start:
 	$(DC) up --build -d
 	@echo ""
 	@echo "✅ App running on:"
-	@echo "Game: http://localhost:5000"
-	@echo "Chatbot: http://localhost:5000/chatbot"
+	@echo "   Game:    http://localhost:5000"
+	@echo "   Chatbot: http://localhost:5000/chatbot"
+	@echo "   Studio:  http://localhost:5000/studio"
 	@echo ""
 
 stop:
@@ -24,4 +25,18 @@ clean:
 logs:
 	$(DC) logs -f
 
-.PHONY: all start stop clean logs
+build-react:
+	@echo "⚛️  Building React app..."
+	cd llm-studio && npm install && npm run build
+	@mkdir -p static/llm-studio
+	@cp -r llm-studio/dist/* static/llm-studio/
+	@echo "✅ React build copied to static/llm-studio/"
+
+dev:
+	@echo "🔧 Starting dev mode..."
+	@echo "   Flask:  http://localhost:5000"
+	@echo "   React:  http://localhost:5173"
+	@echo ""
+	cd llm-studio && npm run dev
+
+.PHONY: all start stop clean logs build-react dev
