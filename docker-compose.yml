@@ -1,5 +1,4 @@
 version: "3.9"
-
 services:
   app:
     build: .
@@ -12,7 +11,7 @@ services:
       - postgres
     volumes:
       - .:/app
-    command: python app.py
+    command: python backend/app.py
 
   postgres:
     image: postgres:15
@@ -27,8 +26,6 @@ services:
     volumes:
       - postgres_data:/var/lib/postgresql/data
       - ./initdb:/docker-entrypoint-initdb.d
-
-
 
 volumes:
   postgres_data:

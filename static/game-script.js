@@ -172,6 +172,10 @@ function loadPythonAI() {
 
       modelLoaded = true;
       document.getElementById('trainingStatus').textContent =
+
+
+
+      
         `AI loaded (${Object.keys(qTable).length} states)`;
 
       resetGame();

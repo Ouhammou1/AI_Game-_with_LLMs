@@ -36,9 +36,8 @@ function Sidebar({ onNewChat, sessions, activeSession, onSelectSession }) {
         <div className="user-avatar">A</div>
         <div>
           <p className="user-name">BRAHIM</p>
-          <span className="user-plan">Pro Plan</span>
+          <span className="user-plan">Go  </span>
         </div>
-        <span className="user-settings">⚙️</span>
       </div>
     </aside>
   )

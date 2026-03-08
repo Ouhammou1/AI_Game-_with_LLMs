@@ -41,7 +41,6 @@ function ChatWindow({ onFirstMessage, initialMessages = [] }) {
   const handleSend = async () => {
     if ((!input.trim() && !uploadedFile) || loading) return
 
-    // Build message text
     let messageText = input
     if (uploadedFile) {
       messageText = input
@@ -62,6 +61,33 @@ function ChatWindow({ onFirstMessage, initialMessages = [] }) {
     if (fileInputRef.current) fileInputRef.current.value = ''
     setLoading(true)
 
+    // Check if image request
+    const imageKeywords = [
+      'generate image', 'create image', 'draw', 'make image',
+      'imagine', 'visualize', 'image of', 'picture of', 'photo of',
+      'generate for me image', 'show me image', 'show image',
+      'generate me', 'create me', 'make me'
+    ]
+    const isImageRequest = imageKeywords.some(kw => messageText.toLowerCase().includes(kw))
+
+    // Use non-streaming endpoint for images
+    if (isImageRequest) {
+      try {
+        const response = await fetch('/api/chat', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ message: messageText })
+        })
+        const data = await response.json()
+        setMessages(prev => [...prev, { role: 'ai', text: data.content }])
+      } catch (error) {
+        setMessages(prev => [...prev, { role: 'ai', text: 'Error generating image.' }])
+      }
+      setLoading(false)
+      return
+    }
+
+    // Normal streaming for text
     try {
       const response = await fetch('/api/chat/stream', {
         method: 'POST',
@@ -146,7 +172,6 @@ function ChatWindow({ onFirstMessage, initialMessages = [] }) {
       </div>
 
       <div className="chat-input-area">
-        {/* File preview */}
         {uploadedFile && (
           <div className="file-preview">
             <span className="file-icon">📄</span>
