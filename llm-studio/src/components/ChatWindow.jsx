@@ -5,43 +5,102 @@ function ChatWindow({ onFirstMessage, initialMessages = [] }) {
   const [messages, setMessages] = useState(initialMessages)
   const [input, setInput] = useState('')
   const [loading, setLoading] = useState(false)
+  const [uploadedFile, setUploadedFile] = useState(null)
   const hasSentFirst = useRef(initialMessages.length > 0)
   const messagesEndRef = useRef(null)
+  const fileInputRef = useRef(null)
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages, loading])
 
-  const handleSend = async () => {
-    if (!input.trim() || loading) return
+  const handleFileUpload = async (e) => {
+    const file = e.target.files[0]
+    if (!file) return
 
-    const userMsg = { role: 'user', text: input }
+    const formData = new FormData()
+    formData.append('file', file)
+
+    try {
+      const res = await fetch('/api/upload', {
+        method: 'POST',
+        body: formData
+      })
+      const data = await res.json()
+      setUploadedFile(data)
+    } catch (error) {
+      console.log('Upload failed')
+    }
+  }
+
+  const removeFile = () => {
+    setUploadedFile(null)
+    fileInputRef.current.value = ''
+  }
+
+  const handleSend = async () => {
+    if ((!input.trim() && !uploadedFile) || loading) return
+
+    // Build message text
+    let messageText = input
+    if (uploadedFile) {
+      messageText = input
+        ? `[File: ${uploadedFile.filename}] ${input}`
+        : `[File: ${uploadedFile.filename}]`
+    }
+
+    const userMsg = { role: 'user', text: messageText }
     setMessages(prev => [...prev, userMsg])
 
     if (!hasSentFirst.current && onFirstMessage) {
-      onFirstMessage(input)
+      onFirstMessage(messageText)
       hasSentFirst.current = true
     }
 
     setInput('')
+    setUploadedFile(null)
+    if (fileInputRef.current) fileInputRef.current.value = ''
     setLoading(true)
 
     try {
-      const response = await fetch('/api/chat', {
+      const response = await fetch('/api/chat/stream', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ message: input })
+        body: JSON.stringify({ message: messageText })
       })
 
-      const data = await response.json()
-      const aiMsg = { role: 'ai', text: data.content }
-      setMessages(prev => [...prev, aiMsg])
-    } catch (error) {
-      const errorMsg = { role: 'ai', text: 'Error connecting to server.' }
-      setMessages(prev => [...prev, errorMsg])
-    }
+      const reader = response.body.getReader()
+      const decoder = new TextDecoder()
 
-    setLoading(false)
+      setMessages(prev => [...prev, { role: 'ai', text: '' }])
+      setLoading(false)
+
+      while (true) {
+        const { done, value } = await reader.read()
+        if (done) break
+
+        const chunk = decoder.decode(value, { stream: true })
+        const lines = chunk.split('\n')
+
+        for (const line of lines) {
+          if (line.startsWith('data: ')) {
+            const token = line.slice(6)
+            if (token === '[DONE]') break
+            setMessages(prev => {
+              const updated = [...prev]
+              updated[updated.length - 1] = {
+                role: 'ai',
+                text: updated[updated.length - 1].text + token
+              }
+              return updated
+            })
+          }
+        }
+      }
+    } catch (error) {
+      setMessages(prev => [...prev, { role: 'ai', text: 'Error connecting to server.' }])
+      setLoading(false)
+    }
   }
 
   const handleKeyDown = (e) => {
@@ -54,10 +113,6 @@ function ChatWindow({ onFirstMessage, initialMessages = [] }) {
   return (
     <div className="chat-window">
       <div className="chat-messages">
-        {/* <div className="system-prompt">
-          <span>System: You are an expert AI game developer specializing in Minimax algorithms.</span>
-        </div> */}
-
         {messages.length === 0 && !loading && (
           <div className="empty-chat">
             <p>Start a conversation...</p>
@@ -91,7 +146,29 @@ function ChatWindow({ onFirstMessage, initialMessages = [] }) {
       </div>
 
       <div className="chat-input-area">
+        {/* File preview */}
+        {uploadedFile && (
+          <div className="file-preview">
+            <span className="file-icon">📄</span>
+            <span className="file-name">{uploadedFile.filename}</span>
+            <button className="file-remove" onClick={removeFile}>✕</button>
+          </div>
+        )}
+
         <div className="input-wrapper">
+          <input
+            type="file"
+            ref={fileInputRef}
+            onChange={handleFileUpload}
+            style={{ display: 'none' }}
+          />
+          <button
+            className="attach-btn"
+            onClick={() => fileInputRef.current.click()}
+            title="Attach file"
+          >
+            📎
+          </button>
           <textarea
             placeholder="Ask the AI about game logic, strategy, or code..."
             rows="1"

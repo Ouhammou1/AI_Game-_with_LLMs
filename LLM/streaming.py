@@ -10,7 +10,7 @@ def stream_response(llm, conversation_history, message):
         for chunk in llm.stream(conversation_history):
             if chunk.content:
                 full_response += chunk.content
-                yield chunk.content  
+                yield chunk.content.replace('\n', '<br>')
 
         conversation_history.append(AIMessage(content=full_response))
 
@@ -19,4 +19,4 @@ def stream_response(llm, conversation_history, message):
         yield handle_error(e)
 
     finally:
-        set_processing(False)           
+        set_processing(False)

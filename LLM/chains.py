@@ -44,12 +44,12 @@ def ask_llm_stream(message):
     try:
         check_rate_limit()
         set_processing(True)
+        return stream_response(llm, conversation_history, message)
     except Exception as e:
+        set_processing(False)
         def error_gen():
             yield handle_error(e)
         return error_gen()
-
-    return stream_response(llm, conversation_history, message)
 
 
 

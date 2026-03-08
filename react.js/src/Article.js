@@ -1,11 +1,14 @@
-export default function Article()
+export default function Article( props )
 {
+    console.log(props)
     return (
         <>
-            <div>
-                <h1>BRAHIM </h1>
-                <h3>brahim@gmail.com</h3>
-                <h3>2001</h3>
+            <div style={{
+            background: "white" ,
+            boxShodow: "0px 10px 10px  gray" , 
+            color : "black",
+            margin: "10px" }}>
+
             </div>
         </>
     )

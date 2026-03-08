@@ -207,3 +207,176 @@ cd llm-studio && npm run build && cd ..
 cp -r llm-studio/dist/* static/llm-studio/
 docker-compose up
 ```
+
+
+The Big Picture:
+```
+User (Browser)
+    │
+    │  http://localhost:5000/studio
+    │
+    ▼
+┌─────────────────────────────────────────────┐
+│              Flask (app.py)                   │
+│                                               │
+│  Serves React files + handles API requests    │
+└──────────────┬────────────────────────────────┘
+               │
+       ┌───────┼───────┐
+       ▼       ▼       ▼
+    React    Groq    PostgreSQL
+    (UI)     (AI)    (Database)
+```
+
+app.py structure (top to bottom):
+
+```
+app.py
+│
+├── 1. IMPORTS
+│       Flask, psycopg2, LLM modules
+│
+├── 2. CONFIG
+│       app = Flask(__name__)
+│       CORS(app)
+│       chat_history = []
+│       SESSION_ID = uuid
+│
+├── 3. DATABASE FUNCTIONS
+│       get_connection()    → connect to PostgreSQL
+│       save_message()      → insert message into DB
+│       get_messages()      → read messages from DB
+│       format_response()   → clean AI response
+│
+├── 4. PAGE ROUTES (serve HTML)
+│       /              → redirect to /game
+│       /game          → Tic-Tac-Toe game
+│       /chatbot       → old chatbot (HTML form)
+│       /studio        → React app
+│
+├── 5. API ROUTES (JSON for React)
+│       /api/chat          → send message, get response
+│       /api/chat/stream   → send message, stream response
+│       /api/clear         → clear chat history
+│       /api/history       → get all messages
+│       /api/new-session   → create new session
+│       /api/set-session   → switch to existing session
+│       /api/sessions      → list all sessions
+│
+└── 6. START SERVER
+        app.run(port=5000)
+```
+
+
+What happens when you send a message:
+```
+Step 1: User types "hello" and clicks Send
+            │
+            ▼
+Step 2: React (ChatWindow.jsx)
+        → fetch('/api/chat/stream', {message: "hello"})
+            │
+            ▼
+Step 3: Flask receives POST /api/chat/stream
+        → saves "hello" to chat_history[]
+        → saves "hello" to PostgreSQL (messages table)
+            │
+            ▼
+Step 4: Flask calls ask_llm_stream("hello")
+        → sends request to Groq API
+        → Groq returns tokens one by one
+            │
+            ▼
+Step 5: Flask streams tokens back to React
+        → data: Hello
+        → data: !
+        → data: How
+        → data: can
+        → data: I
+        → data: help
+        → data: ?
+        → data: [DONE]
+            │
+            ▼
+Step 6: React reads each token
+        → updates AI bubble in real-time
+        → "H" → "He" → "Hel" → "Hello! How can I help?"
+            │
+            ▼
+Step 7: Flask saves full response to PostgreSQL
+```
+
+What happens when you click "New Chat":
+```
+Click "+ New Chat"
+    │
+    ▼
+React (Dashboard.jsx)
+    → fetch('/api/new-session')
+    │
+    ▼
+Flask
+    → chat_history.clear()
+    → SESSION_ID = new UUID
+    → reset_chat() (clears LLM memory)
+    → returns {session_id: "new-uuid"}
+    │
+    ▼
+React
+    → adds new session to sidebar
+    → resets ChatWindow (empty)
+```
+
+
+What happens when you click an old session:
+```
+Click "💬 hello" in sidebar
+    │
+    ▼
+React (Dashboard.jsx)
+    → fetch('/api/set-session', {session_id: "abc123"})
+    │
+    ▼
+Flask
+    → SESSION_ID = "abc123"
+    → SELECT * FROM messages WHERE session_id = 'abc123'
+    → returns all messages as JSON
+    │
+    ▼
+React
+    → loads messages into ChatWindow
+    → you see the old conversation
+```
+
+
+The 3 layers:
+
+```
+┌─────────────────────────────────────┐
+│  FRONTEND (React)                    │
+│  What the user sees and interacts    │
+│                                      │
+│  Sidebar.jsx  → session list         │
+│  Topbar.jsx   → model name           │
+│  ChatWindow.jsx → messages + input   │
+└──────────────────┬──────────────────┘
+                   │ fetch('/api/...')
+                   ▼
+┌─────────────────────────────────────┐
+│  BACKEND (Flask)                     │
+│  Handles logic and connects things   │
+│                                      │
+│  Routes      → receive requests      │
+│  ask_llm()   → call Groq AI          │
+│  save/get    → talk to database      │
+└──────────────────┬──────────────────┘
+                   │ SQL queries
+                   ▼
+┌─────────────────────────────────────┐
+│  DATABASE (PostgreSQL)               │
+│  Stores everything permanently       │
+│                                      │
+│  chat_sessions → list of chats       │
+│  messages      → all messages        │
+└─────────────────────────────────────┘
+```

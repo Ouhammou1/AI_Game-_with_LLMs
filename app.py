@@ -5,7 +5,9 @@ from flask import (
     jsonify,
     redirect,
     url_for,
-    send_from_directory
+    send_from_directory,
+    Response,
+    stream_with_context
 )
 
 from flask_cors import CORS
@@ -15,7 +17,7 @@ import re
 import uuid
 import psycopg2
 from psycopg2.extras import RealDictCursor
-from LLM.chains import ask_llm, reset_chat
+from LLM.chains import ask_llm, ask_llm_stream, reset_chat
 from LLM.image_generator import generate_image
 
 
@@ -136,35 +138,18 @@ def chatbot():
         if action == "image":
             if user_message:
                 result = generate_image(user_message)
-                chat_history.append({
-                    'role': 'user',
-                    'content': user_message,
-                    'time': datetime.now().strftime('%H:%M')
-                })
+                chat_history.append({'role': 'user', 'content': user_message, 'time': datetime.now().strftime('%H:%M')})
                 save_message(SESSION_ID, 'user', user_message)
-
                 if result.startswith("/static/"):
                     content = f"<img src='{result}' width='350' style='border-radius:8px;'>"
                 else:
                     content = result
-
-                chat_history.append({
-                    'role': 'bot',
-                    'content': content,
-                    'time': datetime.now().strftime('%H:%M')
-                })
+                chat_history.append({'role': 'bot', 'content': content, 'time': datetime.now().strftime('%H:%M')})
                 save_message(SESSION_ID, 'bot', content)
-
             return render_template('chatbot.html', messages=chat_history)
 
         if user_message:
-            image_keywords = [
-                "generate image", "create image", "draw", "make image",
-                "generate a photo", "create a photo", "imagine", "visualize",
-                "generate for me image", "show me image", "show image",
-                "generate me", "create me", "make me", "image of",
-                "picture of", "photo of"
-            ]
+            image_keywords = ["generate image", "create image", "draw", "make image", "generate a photo", "create a photo", "imagine", "visualize", "generate for me image", "show me image", "show image", "generate me", "create me", "make me", "image of", "picture of", "photo of"]
             is_image_request = any(kw in user_message.lower() for kw in image_keywords)
 
             if is_image_request:
@@ -172,45 +157,24 @@ def chatbot():
                 for kw in image_keywords:
                     clean_prompt = clean_prompt.replace(kw, "").strip()
                 clean_prompt = clean_prompt or user_message
-
-                chat_history.append({
-                    'role': 'user',
-                    'content': user_message,
-                    'time': datetime.now().strftime('%H:%M')
-                })
+                chat_history.append({'role': 'user', 'content': user_message, 'time': datetime.now().strftime('%H:%M')})
                 save_message(SESSION_ID, 'user', user_message)
-
                 result = generate_image(clean_prompt)
                 if result.startswith("/static/"):
                     content = f"<img src='{result}' width='350' style='border-radius:8px;'>"
                 else:
                     content = result
-
-                chat_history.append({
-                    'role': 'bot',
-                    'content': content,
-                    'time': datetime.now().strftime('%H:%M')
-                })
+                chat_history.append({'role': 'bot', 'content': content, 'time': datetime.now().strftime('%H:%M')})
                 save_message(SESSION_ID, 'bot', content)
             else:
-                chat_history.append({
-                    'role': 'user',
-                    'content': user_message,
-                    'time': datetime.now().strftime('%H:%M')
-                })
+                chat_history.append({'role': 'user', 'content': user_message, 'time': datetime.now().strftime('%H:%M')})
                 save_message(SESSION_ID, 'user', user_message)
-
                 try:
                     response = ask_llm(user_message)
                     response = format_response(response)
                 except Exception as e:
                     response = f"Error: {str(e)}"
-
-                chat_history.append({
-                    'role': 'bot',
-                    'content': response,
-                    'time': datetime.now().strftime('%H:%M')
-                })
+                chat_history.append({'role': 'bot', 'content': response, 'time': datetime.now().strftime('%H:%M')})
                 save_message(SESSION_ID, 'bot', response)
 
         return render_template('chatbot.html', messages=chat_history)
@@ -219,7 +183,7 @@ def chatbot():
 
 
 # =====================
-# JSON API routes (for React frontend)
+# JSON API routes
 # =====================
 
 @app.route('/api/chat', methods=['POST'])
@@ -232,17 +196,10 @@ def api_chat():
     if not user_message:
         return jsonify({'error': 'Empty message'}), 400
 
-    chat_history.append({
-        'role': 'user',
-        'content': user_message,
-        'time': datetime.now().strftime('%H:%M')
-    })
+    chat_history.append({'role': 'user', 'content': user_message, 'time': datetime.now().strftime('%H:%M')})
     save_message(SESSION_ID, 'user', user_message)
 
-    image_keywords = [
-        "generate image", "create image", "draw", "make image",
-        "imagine", "visualize", "image of", "picture of", "photo of"
-    ]
+    image_keywords = ["generate image", "create image", "draw", "make image", "imagine", "visualize", "image of", "picture of", "photo of"]
     is_image_request = any(kw in user_message.lower() for kw in image_keywords)
 
     if is_image_request:
@@ -250,7 +207,6 @@ def api_chat():
         for kw in image_keywords:
             clean_prompt = clean_prompt.replace(kw, "").strip()
         clean_prompt = clean_prompt or user_message
-
         result = generate_image(clean_prompt)
         if result.startswith("/static/"):
             content = f'<img src="{result}" width="350" style="border-radius:8px;">'
@@ -263,18 +219,52 @@ def api_chat():
         except Exception as e:
             content = f"Error: {str(e)}"
 
-    chat_history.append({
-        'role': 'bot',
-        'content': content,
-        'time': datetime.now().strftime('%H:%M')
-    })
+    chat_history.append({'role': 'bot', 'content': content, 'time': datetime.now().strftime('%H:%M')})
     save_message(SESSION_ID, 'bot', content)
 
-    return jsonify({
-        'role': 'bot',
-        'content': content,
-        'time': datetime.now().strftime('%H:%M')
-    })
+    return jsonify({'role': 'bot', 'content': content, 'time': datetime.now().strftime('%H:%M')})
+
+
+# =====================
+# NEW: Streaming endpoint
+# =====================
+
+@app.route('/api/chat/stream', methods=['POST'])
+def api_chat_stream():
+    global chat_history, SESSION_ID
+
+    data = request.get_json()
+    user_message = data.get('message', '').strip()
+
+    if not user_message:
+        return jsonify({'error': 'Empty message'}), 400
+
+    chat_history.append({'role': 'user', 'content': user_message, 'time': datetime.now().strftime('%H:%M')})
+    save_message(SESSION_ID, 'user', user_message)
+
+    def generate():
+        full_response = ''
+        try:
+            for token in ask_llm_stream(user_message):
+                full_response += token
+                yield f'data: {token}\n\n'
+            yield 'data: [DONE]\n\n'
+        except Exception as e:
+            yield f'data: Error: {str(e)}\n\n'
+            yield 'data: [DONE]\n\n'
+            full_response = f'Error: {str(e)}'
+
+        chat_history.append({'role': 'bot', 'content': full_response, 'time': datetime.now().strftime('%H:%M')})
+        save_message(SESSION_ID, 'bot', full_response)
+
+    return Response(
+        stream_with_context(generate()),
+        mimetype='text/event-stream',
+        headers={
+            'Cache-Control': 'no-cache',
+            'X-Accel-Buffering': 'no'
+        }
+    )
 
 
 @app.route('/api/clear', methods=['POST'])
@@ -305,7 +295,6 @@ def api_set_session():
     global chat_history, SESSION_ID
     data = request.get_json()
     SESSION_ID = data.get('session_id', SESSION_ID)
-
     rows = get_messages(SESSION_ID)
     chat_history.clear()
     for row in rows:
@@ -314,7 +303,6 @@ def api_set_session():
             'content': row['content'],
             'time': row['timestamp'].strftime('%H:%M') if row.get('timestamp') else ''
         })
-
     return jsonify({'messages': chat_history})
 
 
@@ -334,7 +322,6 @@ def api_sessions():
         sessions = cur.fetchall()
         cur.close()
         conn.close()
-
         result = []
         for s in sessions:
             title = s['first_message'][:30] + '...' if s['first_message'] and len(s['first_message']) > 30 else (s['first_message'] or 'New Chat')
@@ -363,13 +350,33 @@ def studio_files(path):
     return send_from_directory('static/llm-studio', path)
 
 
-# =====================
-# Error handler
-# =====================
-
 @app.errorhandler(Exception)
 def handle_exception(e):
     return jsonify({"error": str(e)}), 500
+
+
+UPLOAD_FOLDER = os.path.join(BASE_DIR, 'static', 'uploads')
+os.makedirs(UPLOAD_FOLDER, exist_ok=True)
+
+@app.route('/api/upload', methods=['POST'])
+def api_upload():
+    if 'file' not in request.files:
+        return jsonify({'error': 'No file'}), 400
+
+    file = request.files['file']
+    if file.filename == '':
+        return jsonify({'error': 'No file selected'}), 400
+
+    # Save with unique name
+    filename = f"{uuid.uuid4()}_{file.filename}"
+    filepath = os.path.join(UPLOAD_FOLDER, filename)
+    file.save(filepath)
+
+    return jsonify({
+        'filename': file.filename,
+        'path': f'/static/uploads/{filename}',
+        'size': os.path.getsize(filepath)
+    })
 
 
 if __name__ == '__main__':
