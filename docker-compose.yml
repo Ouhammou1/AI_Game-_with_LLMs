@@ -1,4 +1,4 @@
-version: "3.9"
+
 services:
   app:
     build: .
@@ -34,4 +34,4 @@ volumes:
     driver_opts:
       type: none
       o: bind
-      device: /Users/bouhammo/data
+      device: /home/bouhammo/data

@@ -4,7 +4,7 @@ all: start
 
 start:
 	@echo "Starting containers..."
-	cd llm-studio && npm run build && cd ..
+	cd llm-studio && npm install && npm run build && cd ..
 	cp -r llm-studio/dist/* static/llm-studio/
 	$(DC) up --build -d
 	@echo ""
@@ -21,20 +21,22 @@ clean:
 	@echo "Cleaning containers & volumes..."
 	$(DC) down -v
 	docker system prune -f
-	@rm -rf /Users/bouhammo/data/*
+	@sudo rm -rf /home/bouhammo/data/*
+# 	@sudo mkdir -p /home/bouhammo/data
+# 	@sudo chmod 777 /home/bouhammo/data
 
 logs:
 	$(DC) logs -f
 
 build-react:
-	@echo "⚛️  Building React app..."
+	@echo "Building React app..."
 	cd llm-studio && npm install && npm run build
 	@mkdir -p static/llm-studio
 	@cp -r llm-studio/dist/* static/llm-studio/
 	@echo "React build copied to static/llm-studio/"
 
 dev:
-	@echo "🔧 Starting dev mode..."
+	@echo "Starting dev mode..."
 	@echo "   Flask:  http://localhost:5000"
 	@echo "   React:  http://localhost:5173"
 	@echo ""
