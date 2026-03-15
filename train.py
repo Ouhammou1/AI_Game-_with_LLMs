@@ -8,7 +8,7 @@ import random
 
 LEARNING_RATE = 0.1
 DISCOUNT_FACTOR = 0.95
-TRAINING_GAMES = 1000000
+TRAINING_GAMES = 10000000
 EPSILON_START = 0.3
 EPSILON_END = 0.01
 EPSILON_DECAY = (EPSILON_START - EPSILON_END) / TRAINING_GAMES
@@ -168,10 +168,9 @@ def train():
 
 def save_q_table(filename='q_table.json'):
     with open(filename, 'w') as f:
-        json.dump(q_table, f)
+        json.dump(q_table, f, indent=2)
     size_kb = len(json.dumps(q_table)) / 1024
     print(f"Saved to {filename} ({size_kb:.1f} KB)")
-
 
 if __name__ == "__main__":
     train()

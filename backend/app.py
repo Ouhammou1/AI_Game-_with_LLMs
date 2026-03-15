@@ -2,7 +2,8 @@ from flask import Flask, request, jsonify, redirect, url_for, send_from_director
 from flask_cors import CORS
 import os
 import uuid
-
+import json as _json
+import random as _random
 from database import Database
 from routes import ChatManager
 
@@ -25,6 +26,37 @@ chat = ChatManager(db)
 
 
 # =====================
+# AI (Q-Table)
+# =====================
+
+Q_TABLE_PATH = os.path.join(BASE_DIR, 'q_table.json')
+try:
+    with open(Q_TABLE_PATH, 'r') as f:
+        q_table = _json.load(f)
+    print(f"Q-table loaded: {len(q_table)} states")
+except FileNotFoundError:
+    q_table = {}
+    print("q_table.json not found")
+
+def _get_state(board, phase, player):
+    return ''.join([c if c else '-' for c in board]) + f"_{phase}_{player}"
+
+def _get_available_actions(board, phase, player):
+    if phase == 'place':
+        return [{'type': 'place', 'to': i, 'key': f'p{i}'}
+                for i, c in enumerate(board) if c == '']
+    my_pieces = [i for i, c in enumerate(board) if c == player]
+    empty     = [i for i, c in enumerate(board) if c == '']
+    return [{'type': 'move', 'from': frm, 'to': to, 'key': f'm{frm}_{to}'}
+            for frm in my_pieces for to in empty]
+
+def _get_best_action(state, actions):
+    if state not in q_table:
+        return _random.choice(actions)
+    return max(actions, key=lambda a: q_table[state].get(a['key'], 0.0))
+
+
+# =====================
 # Page routes
 # =====================
 
@@ -43,12 +75,29 @@ def serve_qtable():
     except Exception:
         return jsonify({'error': 'q_table.json not found'}), 404
 
-# @app.route('/static/q_table.json')
-# def serve_qtable_static():
-#     try:
-#         return send_from_directory(os.path.join(BASE_DIR, 'static'), 'q_table.json')
-#     except Exception:
-#         return jsonify({'error': 'q_table.json not found in static'}), 404
+
+# =====================
+# AI API              ← THIS WAS MISSING
+# =====================
+
+@app.route('/api/ai-move', methods=['POST'])
+def api_ai_move():
+    data   = request.get_json()
+    board  = data.get('board')
+    phase  = data.get('phase')
+    player = data.get('player', 'O')
+
+    if not board or not phase:
+        return jsonify({'error': 'board and phase required'}), 400
+
+    state     = _get_state(board, phase, player)
+    available = _get_available_actions(board, phase, player)
+
+    if not available:
+        return jsonify({'error': 'no moves available'}), 400
+
+    action = _get_best_action(state, available)
+    return jsonify(action)
 
 
 # =====================

@@ -34,4 +34,4 @@ volumes:
     driver_opts:
       type: none
       o: bind
-      device: /home/bouhammo/data
+      device: /Users/bouhammo/data
