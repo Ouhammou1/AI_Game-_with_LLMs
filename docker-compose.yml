@@ -11,16 +11,15 @@ services:
       - postgres
     volumes:
       - .:/app
-    command: python backend/app.py
 
   postgres:
     image: postgres:15
     restart: unless-stopped
     container_name: game-postgres
     environment:
-      POSTGRES_USER: BRAHIM
-      POSTGRES_PASSWORD: "0000"
-      POSTGRES_DB: chatbot_db
+      POSTGRES_USER: ${DB_USER}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+      POSTGRES_DB: ${DB_NAME}
     ports:
       - "5433:5432"
     volumes:
@@ -34,4 +33,4 @@ volumes:
     driver_opts:
       type: none
       o: bind
-      device: /Users/bouhammo/data
+      device: ${DATA_PATH}

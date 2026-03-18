@@ -1,14 +1,18 @@
 from flask import Flask, request, jsonify, redirect, url_for, send_from_directory, render_template, Response, stream_with_context
 from flask_cors import CORS
+from dotenv import load_dotenv
 import os
 import uuid
 import json as _json
 import random as _random
-from database import Database
+import time
+
+from database import db, get_sessions, ChatSession, Message
 from routes import ChatManager
 
-BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))  
+load_dotenv()  # Load .env file
 
+BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 app = Flask(
     __name__,
@@ -17,18 +21,63 @@ app = Flask(
 )
 CORS(app)
 
-UPLOAD_FOLDER = os.path.join(BASE_DIR, 'static', 'uploads')
+# ===========================
+# Database Configuration
+# ===========================
+# app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///database.db'
+
+# app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:////app/backend/database.db'
+
+
+app.config['SQLALCHEMY_DATABASE_URI'] = (
+    f"postgresql://{os.environ.get('DB_USER')}:"
+    f"{os.environ.get('DB_PASSWORD')}@"
+    f"{os.environ.get('DB_HOST')}:"
+    f"{os.environ.get('DB_PORT')}/"
+    f"{os.environ.get('DB_NAME')}"
+)
+app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+app.config['SQLALCHEMY_ENGINE_OPTIONS'] = {
+    'pool_size': 10,
+    'pool_recycle': 1800,
+    'pool_pre_ping': True   # Auto-check connection before use
+}
+
+db.init_app(app)  # Link SQLAlchemy with Flask
+
+
+# ===========================
+# Wait for Database to be Ready
+# ===========================
+def init_db():
+    retries = 5
+    for i in range(retries):
+        try:
+            with app.app_context():
+                db.create_all()
+                print("✅ Database connected and tables created!")
+                return
+        except Exception as e:
+            print(f"⏳ Waiting for database... attempt {i+1}/{retries}: {e}")
+            time.sleep(3)
+    print("❌ Could not connect to database after 5 attempts!")
+
+init_db()
+
+
+# ===========================
+# Upload Folder
+# ===========================
+UPLOAD_FOLDER = os.path.join(BASE_DIR, 'uploads')
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 
-# Initialize
-db = Database()
-chat = ChatManager(db)
+# Initialize ChatManager
+chat = ChatManager()
 
 
 # =====================
 # AI (Q-Table)
 # =====================
-
 Q_TABLE_PATH = os.path.join(BASE_DIR, 'q_table.json')
 try:
     with open(Q_TABLE_PATH, 'r') as f:
@@ -57,9 +106,8 @@ def _get_best_action(state, actions):
 
 
 # =====================
-# Page routes
+# Page Routes
 # =====================
-
 @app.route('/')
 def home():
     return redirect(url_for('game'))
@@ -77,9 +125,8 @@ def serve_qtable():
 
 
 # =====================
-# AI API              ← THIS WAS MISSING
+# AI API
 # =====================
-
 @app.route('/api/ai-move', methods=['POST'])
 def api_ai_move():
     data   = request.get_json()
@@ -103,7 +150,6 @@ def api_ai_move():
 # =====================
 # Chat API
 # =====================
-
 @app.route('/api/chat', methods=['POST'])
 def api_chat():
     data = request.get_json()
@@ -129,7 +175,6 @@ def api_chat_stream():
 # =====================
 # Session API
 # =====================
-
 @app.route('/api/new-session', methods=['POST'])
 def api_new_session():
     session_id = chat.new_session()
@@ -143,7 +188,7 @@ def api_set_session():
 
 @app.route('/api/sessions', methods=['GET'])
 def api_sessions():
-    return jsonify(db.get_sessions())
+    return jsonify(get_sessions())
 
 @app.route('/api/clear', methods=['POST'])
 def api_clear():
@@ -158,7 +203,6 @@ def api_history():
 # =====================
 # Upload API
 # =====================
-
 @app.route('/api/upload', methods=['POST'])
 def api_upload():
     if 'file' not in request.files:
@@ -177,9 +221,8 @@ def api_upload():
 
 
 # =====================
-# React frontend
+# React Frontend
 # =====================
-
 @app.route('/studio')
 def studio():
     return send_from_directory(os.path.join(BASE_DIR, 'static', 'llm-studio'), 'index.html')

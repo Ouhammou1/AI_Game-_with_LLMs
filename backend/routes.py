@@ -1,15 +1,14 @@
-from flask import request, jsonify, redirect, url_for, send_from_directory, Response, stream_with_context
 from datetime import datetime
 import os
 import re
 import uuid
 
+from database import save_message, get_messages
 from LLM.chains import ask_llm, ask_llm_stream, reset_chat, generate_image
 
 
 class ChatManager:
-    def __init__(self, db):
-        self.db = db
+    def __init__(self):
         self.chat_history = []
         self.session_id = str(uuid.uuid4())
         self.image_keywords = [
@@ -37,7 +36,7 @@ class ChatManager:
             'content': content,
             'time': datetime.now().strftime('%H:%M')
         })
-        self.db.save_message(self.session_id, role, content)
+        save_message(self.session_id, role, content)
 
     def chat(self, user_message):
         if not user_message:
@@ -59,8 +58,8 @@ class ChatManager:
             except Exception as e:
                 content = f"Error: {str(e)}"
 
-        self._save('bot', content)
-        return {'role': 'bot', 'content': content, 'time': datetime.now().strftime('%H:%M')}
+        self._save('assistant', content)  # ✅ تم التصحيح من 'bot' إلى 'assistant'
+        return {'role': 'assistant', 'content': content, 'time': datetime.now().strftime('%H:%M')}
 
     def chat_stream(self, user_message):
         if not user_message:
@@ -80,7 +79,7 @@ class ChatManager:
                 yield 'data: [DONE]\n\n'
                 full_response = f'Error: {str(e)}'
 
-            self._save('bot', full_response)
+            self._save('assistant', full_response)  # ✅ تم التصحيح من 'bot' إلى 'assistant'
 
         return generate
 
@@ -92,13 +91,13 @@ class ChatManager:
 
     def set_session(self, session_id):
         self.session_id = session_id
-        rows = self.db.get_messages(session_id)
+        rows = get_messages(session_id)
         self.chat_history.clear()
         for row in rows:
             self.chat_history.append({
-                'role': row['role'],
+                'role':    row['role'],
                 'content': row['content'],
-                'time': row['timestamp'].strftime('%H:%M') if row.get('timestamp') else ''
+                'time':    row['timestamp'].strftime('%H:%M') if row.get('timestamp') else ''
             })
         return self.chat_history
 
