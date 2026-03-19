@@ -86,7 +86,7 @@ class ChatManager:
     def new_session(self):
         self.chat_history.clear()
         self.session_id = str(uuid.uuid4())
-        reset_chat()
+        # reset_chat()
         return self.session_id
 
     def set_session(self, session_id):

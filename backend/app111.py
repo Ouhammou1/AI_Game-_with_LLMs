@@ -1,25 +1,32 @@
-
-from flask import Flask  , request , redirect , url_for , render_template , send_from_directory , jsonify , stream_with_context 
+from flask import Flask, request, jsonify, redirect, url_for, send_from_directory, render_template, Response, stream_with_context
 from flask_cors import CORS
-import os
 from dotenv import load_dotenv
+import os
+import uuid
+import json as _json
+import random as _random
 import time
-import json
-import random
-from database import db, get_sessions
+from database import db, get_sessions #, ChatSession, Message
 from routes import ChatManager
 
+load_dotenv()  # Load .env file
 
-load_dotenv()
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-
 
 app = Flask(
     __name__,
-    template_folder=os.path.join(BASE_DIR,  'templates'),
-    static_folder=os.path.join(BASE_DIR  , 'static')
+    template_folder=os.path.join(BASE_DIR, 'templates'),
+    static_folder=os.path.join(BASE_DIR, 'static')
 )
 CORS(app)
+
+# ===========================
+# Database Configuration
+# ===========================
+# app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///database.db'
+
+# app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:////app/backend/database.db'
+
 
 app.config['SQLALCHEMY_DATABASE_URI'] = (
     f"postgresql://{os.environ.get('DB_USER')}:"
@@ -28,49 +35,77 @@ app.config['SQLALCHEMY_DATABASE_URI'] = (
     f"{os.environ.get('DB_PORT')}/"
     f"{os.environ.get('DB_NAME')}"
 )
+
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
-app.config['SQLALCHEMY_ENGINE_OPTIONS'] ={
-    'pool_size':10,
-    'pool_recycle':1800,
-    'pool_pre_ping': True
+app.config['SQLALCHEMY_ENGINE_OPTIONS'] = {
+    'pool_size': 10,
+    'pool_recycle': 1800,
+    'pool_pre_ping': True   # Auto-check connection before use
 }
 
-db.init_app(app)
+db.init_app(app)  # Link SQLAlchemy with Flask
 
 
-def  init_db():
-    retries=5
+# ===========================
+# Wait for Database to be Ready
+# ===========================
+def init_db():
+    retries = 5
     for i in range(retries):
         try:
             with app.app_context():
                 db.create_all()
-                print("Database connected ")
+                print("✅ Database connected and tables created!")
                 return
         except Exception as e:
-            print(f"Waiting for database... attempt {i+1}/{retries} : {e}")
+            print(f"⏳ Waiting for database... attempt {i+1}/{retries}: {e}")
             time.sleep(3)
-    print("Could not connect to database after 5 attempts!")
-    
+    print("❌ Could not connect to database after 5 attempts!")
 
-# init_db()
-
-
-    
+init_db()
 
 
-UPLOAD_FOLDER = os.path.join(BASE_DIR , 'uploads')
-os.makedirs(UPLOAD_FOLDER , exist_ok=True)
+# ===========================
+# Upload Folder
+# ===========================
+UPLOAD_FOLDER = os.path.join(BASE_DIR, 'uploads')
+os.makedirs(UPLOAD_FOLDER, exist_ok=True)
+
+# Initialize ChatManager
+chat = ChatManager()
 
 
-
-Q_TABLE_PATH = os.path.join(BASE_DIR , 'q_table.json')
+# =====================
+# AI (Q-Table)
+# =====================
+Q_TABLE_PATH = os.path.join(BASE_DIR, 'q_table.json')
 try:
-    with open(Q_TABLE_PATH , 'r') as f:
-        q_table = json.load(f)
-        print(f"Q-table loaded : {len(q_table)} status")
+    with open(Q_TABLE_PATH, 'r') as f:
+        q_table = _json.load(f)
+    print(f"Q-table loaded: {len(q_table)} states")
 except FileNotFoundError:
     q_table = {}
     print("q_table.json not found")
+
+# def _get_state(board, phase, player):
+#     return ''.join([c if c else '-' for c in board]) + f"_{phase}_{player}"
+
+# def _get_available_actions(board, phase, player):
+#     if phase == 'place':
+#         return [{'type': 'place', 'to': i, 'key': f'p{i}'}
+#                 for i, c in enumerate(board) if c == '']
+#     my_pieces = [i for i, c in enumerate(board) if c == player]
+#     if len(my_pieces) < 3:
+#         return []
+#     empty     = [i for i, c in enumerate(board) if c == '']
+#     return [{'type': 'move', 'from': frm, 'to': to, 'key': f'm{frm}_{to}'}
+#             for frm in my_pieces for to in empty]
+
+# def _get_best_action(state, actions):
+#     if state not in q_table:
+#         return _random.choice(actions)
+#     return max(actions, key=lambda a: q_table[state].get(a['key'], 0.0))
+
 
 
 def _get_state(board, phase, player):
@@ -124,11 +159,8 @@ def _get_available_actions(board, phase, player):
 
 
 def _get_best_action(state, actions):
-    if not actions:
-        return None
-    
     if state not in q_table:
-        return  random.choice(actions)
+        return  _random.choice(actions)
     
     best_action = None
     best_value = float('-inf')
@@ -145,90 +177,69 @@ def _get_best_action(state, actions):
 
 
 
-#page routes
 
+# =====================
+# Page Routes
+# =====================
 @app.route('/')
 def home():
     return redirect(url_for('game'))
-
 
 @app.route('/game')
 def game():
     return render_template('game.html')
 
-
 @app.route('/q_table.json')
 def serve_qtable():
     try:
         return send_from_directory(BASE_DIR, 'q_table.json')
-    except Exception as e:
+    except Exception:
         return jsonify({'error': 'q_table.json not found'}), 404
 
 
-
-
-# fetch('/api/ai-move', {
-#   method: 'POST',
-#   headers: {
-#     'Content-Type': 'application/json'
-#   },
-#   body: JSON.stringify({
-#     board: ["X", "", "O"],
-#     phase: "place",
-#     player: "O"
-#   })
-# })
-
-
-
-#AI API
-@app.route('/api/ai-move' , methods=['POST'])
+# =====================
+# AI API
+# =====================
+@app.route('/api/ai-move', methods=['POST'])
 def api_ai_move():
-    data =  request.get_json()
-    board = data.get('board')
-    phase = data.get('phase')
-    player = data.get('player' , 'O')
+    data   = request.get_json()
+    board  = data.get('board')
+    phase  = data.get('phase')
+    player = data.get('player', 'O')
 
-    if not board  or phase:
-        return jsonify({'error' : 'no moves available'}) , 400
+    if not board or not phase:
+        return jsonify({'error': 'board and phase required'}), 400
 
-    state = _get_state(board , phase , player)
-    availabe = _get_available_actions(board , phase , player)
+    state     = _get_state(board, phase, player)
+    available = _get_available_actions(board, phase, player)
 
-    if not availabe:
-        return jsonify({'error' , 'no moves availabe'}) , 400
-    
-    action = _get_best_action(state , availabe)
+    if not available:
+        return jsonify({'error': 'no moves available'}), 400
+
+    action = _get_best_action(state, available)
     return jsonify(action)
-    
 
 
-
-
-
-#chat API
-
-chat = ChatManager()
-
-@app.route('/api/chat' , methods=['POST'])
+# =====================
+# Chat API
+# =====================
+@app.route('/api/chat', methods=['POST'])
 def api_chat():
     data = request.get_json()
-    result = chat.chat(data.get('message' , '').strip())
-
-    if isinstance(result , tuple):
-        return jsonify(result[0] , result[1])
+    result = chat.chat(data.get('message', '').strip())
+    if isinstance(result, tuple):
+        return jsonify(result[0]), result[1]
     return jsonify(result)
 
 
-@app.route('/api/chat/stream' , methods=['POST'])
+
+@app.route('/api/chat/stream', methods=['POST'])
 def api_chat_stream():
-    data  = request.get_json()
-    message = data.get('message' , '').strip()
+    data = request.get_json()
+    message = data.get('message', '').strip()
     generator = chat.chat_stream(message)
-    
     if not generator:
-        return jsonify({'error' , 'Empty message'}),400
-    
+        return jsonify({'error': 'Empty message'}), 400
     return Response(
         stream_with_context(generator()),
         mimetype='text/event-stream',
@@ -236,24 +247,22 @@ def api_chat_stream():
     )
 
 
-
-
-
-#Session API
+# =====================
+# Session API
+# =====================
 
 @app.route('/api/new-session', methods=['POST'])
 def api_new_session():
     session_id = chat.new_session()
-    return jsonify({'session_id' : session_id})
+    return jsonify({'session_id': session_id})
 
-@app.route('/api/set-session' , methods=['POST'])
+@app.route('/api/set-session', methods=['POST'])
 def api_set_session():
     data = request.get_json()
-    message = chat.set_session(data.get('session_id'))
-    return jsonify ({'messages' : message})
+    messages = chat.set_session(data.get('session_id'))
+    return jsonify({'messages': messages})
 
-
-@app.route('/api/sessions' , methods=['GET'])
+@app.route('/api/sessions', methods=['GET'])
 def api_sessions():
     return jsonify(get_sessions())
 
@@ -265,11 +274,6 @@ def api_clear():
 @app.route('/api/history', methods=['GET'])
 def api_history():
     return jsonify(chat.chat_history)
-
-
-
-
-
 
 
 # =====================
@@ -292,9 +296,6 @@ def api_upload():
     })
 
 
-
-
-
 # =====================
 # React Frontend
 # =====================
@@ -314,58 +315,3 @@ def handle_exception(e):
 
 if __name__ == '__main__':
     app.run(host="0.0.0.0", port=5000, debug=True)
-
-
-
-
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
- # board = ['X', None, 'O', None, None, 'X', None, None, 'O']
-# board = ['X', '', 'O', '', '', '', '', '', '']
-# phase = "move"
-# player = "X"
-
-# # print(_get_state(board, phase, player))
-# # board = _get_state(board, phase, player)
-
-# print(f" Board  = {board}")
-# x = _get_available_actions(board, phase, player)
-# for i in x:
-#     print(i)
-
-# _get_best_action("" , "")
-
-
-# # if __name__ == "__main__":
-# #     app.run(host="0.0.0.0" , port=9000 , debug=True)
