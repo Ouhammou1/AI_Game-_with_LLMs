@@ -3,12 +3,16 @@ Q-Learning AI Trainer for Tic-Tac-Toe
 3-Piece Moving Rule: After placing 3 pieces each, players MOVE existing pieces
 """
 
+
+
+
 import json
 import random
 
 LEARNING_RATE = 0.1
 DISCOUNT_FACTOR = 0.95
-TRAINING_GAMES = 10000000
+# TRAINING_GAMES = 10000000
+TRAINING_GAMES = 1000
 EPSILON_START = 0.3
 EPSILON_END = 0.01
 EPSILON_DECAY = (EPSILON_START - EPSILON_END) / TRAINING_GAMES

@@ -21,7 +21,7 @@ clean:
 	@echo "Cleaning containers & volumes..."
 	$(DC) down -v
 	docker system prune -f
-	@rm -rf /Users/bouhammo/data/*
+	@sudo rm -rf /home/bouhammo/data/*
 # 	@sudo mkdir -p /home/bouhammo/data
 # 	@sudo chmod 777 /home/bouhammo/data
 
