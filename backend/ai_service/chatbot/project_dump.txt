@@ -1,0 +1,844 @@
+
+===== ./api/__init__.py =====
+from api.chat    import chat_bp
+from api.session import session_bp 
+
+__all__ = ["chat_bp",  "session_bp"]
+===== ./api/auth.py =====
+import os
+import jwt
+from flask import request
+
+
+def get_user_id():
+    token = request.cookies.get('access_token')
+    print("\n\n\n\n\n\n\n\n\n\n\n\n  access_token  \n\n\n\n\n\n\n\n\n\n\n\n " , flush=True)
+    print(f"token = {token} \n\n" , flush=True)
+    if not token:
+        return request.remote_addr
+    try:
+        decoded = jwt.decode(token, os.getenv('DJANGO_SECRET_KEY'), algorithms=['HS256'])
+        return str(decoded.get('user_id'))
+    except Exception as e:
+        print(f"[JWT] Failed to decode token: {e}")
+        return request.remote_addr
+    
+
+
+
+
+
+
+
+
+
+
+
+
+#     import os
+# import jwt
+# from flask import request
+
+
+# def get_user_id():
+#     """
+#     Returns the authenticated user_id from JWT cookie.
+#     Returns None if user is not authenticated or token is invalid.
+#     """
+#     token = request.cookies.get('access_token')
+    
+#     if not token:
+#         print("[AUTH] No access_token cookie", flush=True)
+#         return None
+    
+#     try:
+#         decoded = jwt.decode(
+#             token,
+#             os.getenv('DJANGO_SECRET_KEY'),
+#             algorithms=['HS256']
+#         )
+#         user_id = decoded.get('user_id')
+#         if not user_id:
+#             print("[AUTH] Token missing user_id field", flush=True)
+#             return None
+#         return str(user_id)
+#     except jwt.ExpiredSignatureError:
+#         print("[AUTH] Token expired", flush=True)
+#         return None
+#     except jwt.InvalidTokenError as e:
+#         print(f"[AUTH] Invalid token: {e}", flush=True)
+#         return None
+#     except Exception as e:
+#         print(f"[AUTH] Failed to decode token: {e}", flush=True)
+#         return None
+===== ./api/chat.py =====
+from flask import Blueprint, request, jsonify, Response, stream_with_context
+from api.auth import get_user_id
+from manager import ChatManager
+from database.queries import update_session_title, get_messages
+from database.models import ChatSession
+from extensions import db
+from rate_limiting import check_rate_limit
+
+
+chat_bp = Blueprint('chat', __name__, url_prefix='/api')
+
+
+def get_chat():
+    chat = ChatManager()
+    chat.set_user(get_user_id())
+    return chat
+
+
+@chat_bp.post('/chat/stream')
+# @limiter.limit("10 per minite")
+def chat_stream():
+    data       = request.get_json()
+
+    print("------------------------------------<<<<<<<<<<<<<<<<<>>>>>>>>>>>>>>>>>>>\n\n\n\n" , flush=True)
+    print(f"[DEBUG] DATA = {data}" , flush=True)
+
+
+
+
+
+    if not check_rate_limit(get_user_id()):
+        return jsonify({"error": "Too many requests"}), 429
+    
+
+    message    = data.get('message', '').strip()
+    session_id = data.get('session_id')
+
+    if not message:
+        return jsonify({'error': 'Empty message'}), 400
+
+    if not session_id:
+        return jsonify({'error': 'session_id is required'}), 400
+
+    chat = get_chat()
+    chat.set_session(session_id)
+
+    return Response(
+        stream_with_context(chat.chat_stream(message)),
+        mimetype='text/event-stream',
+        headers={'Cache-Control': 'no-cache', 'X-Accel-Buffering': 'no'},
+    )
+
+
+# @chat_bp.get('/history')
+# def history():
+#     chat = get_chat()
+#     return jsonify(chat.chat_history)
+
+
+@chat_bp.get('/history')
+def history():
+    session_id = request.args.get('session_id')
+
+    if not session_id:
+        return jsonify([])
+    
+    msg = get_messages(session_id=session_id)
+    return jsonify(msg)
+
+@chat_bp.post('/clear')
+def clear():
+    chat = get_chat()
+    chat.clear()
+    return jsonify({'status': 'cleared'})
+
+
+@chat_bp.post('/generate-title')
+def generate_title():
+    data       = request.get_json()
+    message    = data.get('message', '')
+    session_id = data.get('session_id')
+
+    if not message or not session_id:
+        return jsonify({'title': 'New Chat'})
+
+    chat = get_chat()
+    try:
+        session = ChatSession.query.get(session_id)
+
+        if not session:
+            session = ChatSession(session_id=session_id, user_id=get_user_id())
+            db.session.add(session)
+            db.session.commit()
+
+        if session.title:
+            return jsonify({'title': session.title})
+
+        title = chat.generate_title(message)
+        update_session_title(session_id, title)
+        return jsonify({'title': title})
+
+    except Exception as e:
+        print(f"[Title ERROR] {e}")
+        return jsonify({'title': 'New Chat'})
+    
+
+
+
+
+    
+===== ./api/session.py =====
+from flask import Blueprint, request, jsonify
+from api.auth import get_user_id
+from database.queries import get_sessions
+from database.models import ChatSession , Message
+from extensions import db
+from api.chat import get_chat
+
+
+session_bp = Blueprint('session', __name__, url_prefix='/api')
+
+
+@session_bp.post('/new-session')
+def new_session():
+    chat       = get_chat()
+    session_id = chat.new_session()
+    print("\n\n\n\n\n\n\n  session_id  \n\n\n\n\n\n\n\n " , flush=True)
+    print(f"session id = {session_id} \n\n\n " , flush=True)
+
+    user_id    = get_user_id()
+
+    if not user_id:
+        print("************************---------------------**************-\n\n\n\n\n" , flush=True)
+        return jsonify ({'error' : 'Unauthorized'})
+
+    db.session.add(ChatSession(session_id=session_id, user_id=user_id))
+    db.session.commit()
+
+    return jsonify({'session_id': session_id})
+
+
+@session_bp.post('/set-session')
+def set_session():
+    data       = request.get_json()
+    session_id = data.get('session_id')
+
+    if not session_id:
+        return jsonify({'error': 'No session_id provided'}), 400
+
+    chat     = get_chat()
+    messages = chat.set_session(session_id)
+
+    formatted = [
+        {
+            'role':      m['role'],
+            'content':   m['content'].replace('\n', '<br>'),
+            'timestamp': m.get('timestamp', ''),
+        }
+        for m in messages
+    ]
+    return jsonify({'session_id': session_id, 'messages': formatted})
+
+
+@session_bp.get('/sessions')
+def sessions():
+    return jsonify(get_sessions(user_id=get_user_id()))
+
+
+
+@session_bp.delete('/delete-session')
+def delete_session():
+    data = request.get_json()
+    print(f"datat =  {data} \n\n " , flush=True)
+
+    session_id = data.get('session_id')
+    print(f"session_id  ===       {session_id} \n\n " , flush=True)
+
+    if not session_id:
+        return jsonify({'error' : 'No session id provided'}) , 400
+    
+    user_id = get_user_id()
+    if not user_id:
+        return jsonify({'error': 'Unauthorized'}) , 401
+    
+
+    try:
+        session = ChatSession.query.filter_by(session_id=session_id , user_id=user_id).first()
+        if not session :
+            return jsonify({"error" : 'Session not found'}) , 404
+        
+        Message.query.filter_by(session_id=session_id).delete()
+        db.session.delete(session)
+        db.session.commit()
+        return jsonify({'status' : 'deleted'})
+    except Exception as e:
+        db.session.rollback()
+        print(f"[Delete ERROR] {e}")
+        return jsonify({'error' : str(e) }) , 500
+
+    
+===== ./app.py =====
+import time
+from flask import Flask  , jsonify
+from flask_cors import CORS
+from config import AppConfig
+from extensions import db 
+from api import chat_bp, session_bp
+
+
+
+
+def register_error_handlers(app):
+
+    @app.errorhandler(400)
+    def bad_request(e):
+        return jsonify({'error' : "Bad request"}), 400
+    
+    @app.errorhandler(401)
+    def unauthorized(e):
+        return jsonify({'error' : "Unauthorized" }) , 401
+    
+    @app.errorhandler(404)
+    def  not_found(e):
+        return jsonify({"error" : "Not found"}) , 404
+    
+    @app.errorhandler(500)
+    def server_error(e):
+        return jsonify({"error" : "Internal server error"}),500
+    
+    @app.errorhandler(Exception)
+    def handle_exception(e):
+        print(f"[GLOBAL ERROR] {e}")
+        return jsonify({"error" : str(e)}) , 500
+        
+
+
+
+
+def _init_db(app: Flask):
+    for i in range(1, 6):
+        try:
+            with app.app_context():
+                db.create_all()
+                print("[chat_bot] Database connected")
+                return
+        except Exception as e:
+            print(f"[chat_bot] DB not ready, attempt {i}/5: {e}")
+            time.sleep(3)
+    print("[chat_bot] Could not connect to database after 5 attempts")
+
+
+
+def create_app() -> Flask:
+    app = Flask(__name__ )
+    app = Flask(__name__ )
+    app.config.from_object(AppConfig)
+    CORS(app)
+
+    db.init_app(app)
+    _init_db(app)
+
+
+    for bp in (chat_bp, session_bp ):
+        app.register_blueprint(bp)
+
+    register_error_handlers(app)
+    
+    return app
+
+
+
+app = create_app()
+
+
+@app.route('/test-error')
+def test_error():
+    return 1 / 0
+
+
+
+if __name__ == '__main__':
+    app.run(host="0.0.0.0", port=5000 )
+===== ./config.py =====
+import os
+from dotenv import load_dotenv
+
+load_dotenv()
+
+
+class AppConfig:
+    SQLALCHEMY_DATABASE_URI = (
+        f"postgresql://{os.environ.get('DB_USER')}:"
+        f"{os.environ.get('DB_PASSWORD')}@"
+        f"{os.environ.get('DB_HOST')}:"
+        f"{os.environ.get('DB_PORT')}/"
+        f"{os.environ.get('DB_NAME')}"
+    )
+    SQLALCHEMY_TRACK_MODIFICATIONS = False
+    SQLALCHEMY_ENGINE_OPTIONS = {
+        'pool_size': 10,
+        'pool_recycle': 1800,
+        'pool_pre_ping': True,
+    }
+
+    DJANGO_SECRET_KEY = os.getenv("DJANGO_SECRET_KEY")
+
+===== ./database/__init__.py =====
+from database.models import ChatSession, Message
+from database.queries import save_message, get_messages, get_sessions, update_session_title
+
+
+
+__all__ = [ "ChatSession", "Message","save_message", "get_messages", "get_sessions", "update_session_title"]
+===== ./database/models.py =====
+from datetime import datetime
+from extensions import db
+
+
+
+class ChatSession(db.Model):
+    __tablename__ = 'chat_sessions'
+
+    session_id    = db.Column(db.String, primary_key=True)
+    user_id       = db.Column(db.String, nullable=False, index=True)
+    title         = db.Column(db.String, nullable=True)
+    created_at    = db.Column(db.DateTime, default=datetime.utcnow)
+    updated_at    = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    message_count = db.Column(db.Integer, default=0)
+    messages      = db.relationship('Message', backref='session', lazy=True)
+
+
+class Message(db.Model):
+    __tablename__ = 'messages'
+
+    id         = db.Column(db.Integer, primary_key=True, autoincrement=True)
+    session_id = db.Column(db.String, db.ForeignKey('chat_sessions.session_id'), nullable=False)
+    role       = db.Column(db.String, nullable=False)
+    content    = db.Column(db.Text, nullable=False)
+    timestamp  = db.Column(db.DateTime, default=datetime.utcnow)
+
+
+
+class UserUsage(db.Model):
+    __tablename__ = "user_usage"
+
+    user_id = db.Column(db.String, primary_key=True)
+    daily_count = db.Column(db.Integer, default=0)
+    updated_at = db.Column(db.DateTime)
+
+
+===== ./database/queries.py =====
+from datetime import datetime , timedelta
+from extensions import db
+from database.models import ChatSession, Message , UserUsage
+
+
+
+
+
+
+
+# messages
+
+def save_message(session_id: str, role: str, content: str, user_id: str = None):
+    try:
+        session = ChatSession.query.get(session_id)
+        if not session:
+            session = ChatSession(session_id=session_id, user_id=user_id)
+            db.session.add(session)
+
+        db.session.add(Message(session_id=session_id, role=role, content=content))
+        session.message_count = (session.message_count or 0) + 1
+        session.updated_at = datetime.utcnow()
+        db.session.commit()
+    except Exception as e:
+        db.session.rollback()
+        print(f"[DB ERROR] save_message: {e}")
+
+
+
+
+
+
+
+def get_messages(session_id: str) -> list:
+    try:
+        rows = (
+            Message.query
+            .filter_by(session_id=session_id)
+            .order_by(Message.id.asc())
+            .all()
+        )
+        print(f"[DB] Loaded {len(rows)} messages for session {session_id}")
+        return [
+            {"role": m.role, "content": m.content, "timestamp": m.timestamp.isoformat()}
+            for m in rows
+        ]
+    except Exception as e:
+        print(f"[DB ERROR] get_messages: {e}")
+        return []
+    
+
+
+
+# # sessions
+
+def get_sessions(user_id: str = None) -> list:
+    try:
+        query = ChatSession.query.order_by(ChatSession.updated_at.desc())
+        if user_id:
+            query = query.filter_by(user_id=user_id)
+
+        result = []
+        for s in query.all():
+            if s.title:
+                title = s.title
+            else:
+                first_msg = (
+                    Message.query
+                    .filter_by(session_id=s.session_id, role='user')
+                    .order_by(Message.timestamp.asc())
+                    .first()
+                )
+                if first_msg:
+                    title = first_msg.content[:30] + ('...' if len(first_msg.content) > 30 else '')
+                else:
+                    title = 'New chat'
+
+            result.append({
+                'session_id':    s.session_id,
+                'title':         title,
+                'message_count': s.message_count,
+                'created_at':    s.created_at.isoformat(),
+            })
+        return result
+    except Exception as e:
+        print(f"[DB ERROR] get_sessions: {e}")
+        return []
+
+
+
+
+
+def update_session_title(session_id: str, title: str):
+    try:
+        session = ChatSession.query.get(session_id)
+        if session:
+            session.title = title
+            session.updated_at = datetime.utcnow()
+            db.session.commit()
+            print(f"[DB] Title updated for session {session_id}: {title}")
+        else:
+            print(f"[DB] Session {session_id} not found")
+    except Exception as e:
+        db.session.rollback()
+        print(f"[DB ERROR] update_session_title: {e}")
+
+
+
+
+
+===== ./extensions.py =====
+from flask_sqlalchemy import SQLAlchemy
+# from flask_limiter import Limiter
+# from api.auth import get_user_id
+
+
+
+db = SQLAlchemy()
+
+
+
+===== ./llm/bot.py =====
+from langchain_core.messages import HumanMessage, AIMessage
+from llm.config import Config
+
+
+        
+
+class ChatBot:
+    def __init__(self):
+        self.config = Config()
+        self.llm    = self.config.llm
+        self.history = [self.config.system_message]
+        self.error = False
+
+    def ask_stream(self, message: str):
+        self.error  = False
+        try:
+            self.history.append(HumanMessage(content=message))
+            full_response = ""
+            for chunk in self.llm.stream(self.history):
+                if chunk.content:
+                    full_response += chunk.content
+                    yield chunk.content.replace('\n', '<br>')
+            self.history.append(AIMessage(content=full_response))
+        except Exception as e:
+            if self.history and isinstance(self.history[-1] , HumanMessage):
+                self.history.pop()
+            
+            self.error = True
+            # self.reset()
+            yield Config.handle_error(e)
+
+    def reset(self):
+        self.history = [self.config.system_message]
+
+    def load_history(self, messages: list):
+        self.history = [self.config.system_message]
+        for m in messages:
+            if m["role"] == "user":
+                self.history.append(HumanMessage(content=m["content"]))
+            elif m["role"] == "assistant":
+                self.history.append(AIMessage(content=m["content"]))
+
+
+    def generate_title(self, message: str) -> str:
+        try:
+            response = self.llm.invoke([
+                self.config.system_message,
+                HumanMessage(content=f"Generate a short title (max 5 words) for this message:\n{message}"),
+            ])
+            return response.content.strip()
+        except Exception:
+            return "New Chat"
+
+
+# per-user bot register
+
+_bots: dict = {}
+
+
+def get_bot(session_id: str) -> ChatBot:
+    if session_id not in _bots:
+        _bots[session_id] = ChatBot()
+    return _bots[session_id]
+===== ./llm/config.py =====
+import os
+import logging
+from dotenv import load_dotenv
+from langchain_openai import ChatOpenAI
+from langchain_core.messages import SystemMessage
+
+load_dotenv()
+
+
+class Config:
+    def __init__(self):
+        self.llm = ChatOpenAI(
+            model="meta-llama/llama-3.3-70b-instruct",
+            temperature=0.7,
+            max_tokens=1024,
+            api_key=os.getenv("OPENROUTER_API_KEY"),
+            base_url="https://openrouter.ai/api/v1",
+            streaming=True,
+            default_headers={
+                "HTTP-Referer": "https://localhost:5000",
+                "X-Title": "LLM Studio",
+            },
+        )
+
+        self.system_message = SystemMessage(
+            content=(
+                "You are a helpful and knowledgeable AI assistant. "
+                "Always respond in the same language as the user's question. "
+                "Give clear and well-structured answers with explanations and examples when helpful. "
+                "Use simple plain text only. "
+                "For lists, use numbers like 1. 2. 3. only. "
+                "Do NOT use any markdown formatting (no **, no *, no #, no -, no backticks). "
+                "Do NOT use symbols for styling. "
+                "Write everything in clean readable sentences. "
+                "If you are unsure, say you don't know."
+            )
+        )
+
+    @staticmethod
+    def handle_error(e: Exception) -> str:
+        logging.error(f"LLM Error: {e}")
+        msg = str(e).lower()
+        if "timed out" in msg:
+            return "The AI is taking too long to respond. Please try again."
+        elif "rate limit" in msg:
+            return "Too many requests. Please wait a moment and try again."
+        elif "quota" in msg or "exhausted" in msg:
+            return "API quota exceeded. Please try again later."
+        elif "402" in msg  or "credits" in msg:
+            return "AI service is out of credits. Please try later."
+        return f"Error: {e}"
+    
+
+
+===== ./manager.py =====
+import re
+import uuid
+from database.queries import save_message, get_messages
+from llm.bot import get_bot, ChatBot
+
+
+
+class ChatManager:
+    def __init__(self):
+        self.chat_history = []
+        self.session_id   = str(uuid.uuid4())
+        self.user_id      = None
+
+    def set_user(self, user_id):
+        self.user_id = user_id
+
+    def _bot(self) -> ChatBot:
+        return get_bot(self.session_id)
+
+    @staticmethod
+    def _clean(text: str) -> str:
+        return re.sub(r'\*+', '', text).replace('\n', '<br>')
+
+    def _save(self, role: str, content: str):
+        self.chat_history.append({"role": role, "content": content})
+        save_message(self.session_id, role, content, user_id=self.user_id)
+
+
+    def chat_stream(self, message: str):
+        full_response = []
+
+        for chunk in self._bot().ask_stream(message):
+            full_response.append(chunk)
+            yield f"data: {chunk}\n\n"
+
+        complete = "".join(full_response).replace('<br>', '\n')
+
+        if self._bot().error == False:
+            self._save("user", message)
+            self._save("assistant", complete)
+        yield "data: [DONE]\n\n"
+
+    def new_session(self) -> str:
+        self.chat_history.clear()
+        self.session_id = str(uuid.uuid4())
+        self._bot().reset()
+        return self.session_id
+
+    def set_session(self, session_id: str) -> list:
+        self.session_id   = session_id
+        self.chat_history = get_messages(session_id)
+        self._bot().reset()
+        self._bot().load_history(self.chat_history)
+        return self.chat_history
+
+    def clear(self):
+        self.chat_history.clear()
+        self._bot().reset()
+
+    def generate_title(self, message: str) -> str:
+        return self._bot().generate_title(message)
+===== ./rate_limiting.py =====
+import redis
+from datetime import datetime, timedelta
+from extensions import db
+from database.models import UserUsage
+
+r = redis.Redis(host="redis", port=6379, decode_responses=True)
+
+LIMIT_PER_MINUTE = 10
+LIMIT_PER_DAY    = 1000
+SYNC_EVERY       = 10
+SAFETY_ZONE      = 50  # always sync when close to daily limit
+
+
+def _seconds_until_midnight():
+    now = datetime.utcnow()
+    tomorrow = (now + timedelta(days=1)).replace(hour=0, minute=0, second=0, microsecond=0)
+    return int((tomorrow - now).total_seconds())
+
+
+def _restore_from_postgres(user_id: str) -> int:
+    """If Redis lost the data, restore daily_count from Postgres."""
+    usage = UserUsage.query.get(user_id)
+    today = datetime.utcnow().date()
+
+    if usage and usage.updated_at and usage.updated_at.date() == today:
+        return usage.daily_count
+    return 0
+
+
+def _sync_to_postgres(user_id: str, daily_count: int):
+    """Write Redis value back to Postgres as backup."""
+    try:
+        usage = UserUsage.query.get(user_id)
+        if not usage:
+            usage = UserUsage(user_id=user_id, daily_count=daily_count)
+            db.session.add(usage)
+        else:
+            usage.daily_count = daily_count
+        usage.updated_at = datetime.utcnow()
+        db.session.commit()
+    except Exception as e:
+        db.session.rollback()
+        print(f"[SYNC ERROR] {e}")
+
+
+def check_rate_limit(user_id: str):
+    minute_key = f"rate:minute:{user_id}"
+    daily_key  = f"rate:daily:{user_id}"
+
+    try:
+        # ---- DAILY COUNT (Redis primary) ----
+        daily_count = r.get(daily_key)
+
+        if daily_count is None:
+            # Redis lost the key (restart, eviction, or first time today)
+            # → restore from Postgres
+            restored = _restore_from_postgres(user_id)
+            r.set(daily_key, restored, ex=_seconds_until_midnight())
+            daily_count = restored
+        else:
+            daily_count = int(daily_count)
+
+        if daily_count >= LIMIT_PER_DAY:
+            return False
+
+        # ---- PER-MINUTE COUNT (Redis only) ----
+        minute_count = r.get(minute_key)
+        if minute_count and int(minute_count) >= LIMIT_PER_MINUTE:
+            return False
+
+        # ---- INCREMENT both counters in Redis ----
+        pipe = r.pipeline()
+        pipe.incr(minute_key)
+        pipe.expire(minute_key, 60)
+        pipe.incr(daily_key)
+        pipe.expire(daily_key, _seconds_until_midnight())
+        results = pipe.execute()
+
+        new_daily = results[2]
+
+        # ---- SYNC TO POSTGRES ----
+        # every N increments OR when close to the daily limit
+        if new_daily % SYNC_EVERY == 0 or new_daily >= LIMIT_PER_DAY - SAFETY_ZONE:
+            _sync_to_postgres(user_id, new_daily)
+
+        return True
+
+    except redis.RedisError as e:
+        print(f"[REDIS DOWN] {e} — falling back to Postgres")
+        return _check_rate_limit_postgres_only(user_id)
+
+
+def _check_rate_limit_postgres_only(user_id: str):
+    """Fallback when Redis is unreachable."""
+    try:
+        usage = UserUsage.query.get(user_id)
+        today = datetime.utcnow().date()
+
+        if not usage:
+            usage = UserUsage(user_id=user_id, daily_count=0, updated_at=datetime.utcnow())
+            db.session.add(usage)
+
+        if usage.updated_at and usage.updated_at.date() != today:
+            usage.daily_count = 0
+
+        if usage.daily_count >= LIMIT_PER_DAY:
+            return False
+
+        usage.daily_count += 1
+        usage.updated_at = datetime.utcnow()
+        db.session.commit()
+        return True
+    except Exception as e:
+        db.session.rollback()
+        print(f"[DB FALLBACK ERROR] {e}")
+        return True

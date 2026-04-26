@@ -1,0 +1,191 @@
+services:
+  db:
+    image: postgres:16
+    restart: always
+    container_name : db
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_USER: sayf
+      POSTGRES_PASSWORD: 1234
+      POSTGRES_DB: mydb
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    networks:
+      - app-network
+
+  pgadmin:
+    image: dpage/pgadmin4
+    networks:
+      - app-network
+    restart: always
+    ports:
+      - "1234:80"
+    environment:
+      PGADMIN_DEFAULT_EMAIL: hh@pgadmin.com
+      PGADMIN_DEFAULT_PASSWORD: 1234
+    depends_on:
+      - db
+
+  auth:
+    container_name: auth
+    build: ../backend/auth
+    command: python3 manage.py runserver 0.0.0.0:8000
+    restart: always
+    networks:
+      - app-network
+    volumes:
+      - ../backend/auth/myauth:/app
+    depends_on:
+      - db
+
+  frontend:
+    container_name: frontend
+    restart: always
+    networks:
+      - app-network
+    environment:
+      - VITE_CLERK_PUBLISHABLE_KEY=pk_test_...
+      - VITE_API_URL=http://localhost:8080/
+      - VITE_CHAT_API=https://localhost:8443/api
+    build: ../frontend
+    volumes:
+      - ../frontend:/app/
+      - /app/node_modules 
+
+  nginx:
+    build : ./nginx
+    container_name: nginx
+    ports:
+      - "8080:80"
+      - "8443:443"
+    networks:
+      - app-network
+    restart: always
+    depends_on:
+      - frontend
+      - auth
+      - db
+      - ai_game
+      - chatbot
+      - chat-system
+      
+
+  game:
+    build: ../backend/game_service
+    container_name: game
+    restart: unless-stopped
+    networks:
+      - app-network
+    environment:
+      DATABASE_URL: postgres://sayf:1234@db:5432/mydb
+      SECRET_KEY: ${DJANGO_SECRET_KEY}
+    ports:
+      - "1339:3000"
+    # env_file:
+    #   - .env
+    depends_on:
+      - db
+      - auth
+      - frontend
+  
+  ai_game:
+    build: ../backend/ai_service/ai_game
+    container_name: ai_game
+    ports:
+      - "5001:5001"
+    networks:
+      - app-network
+
+
+  redis:
+    image: redis:7
+    container_name: redis
+    ports:
+      - "6379:6379"
+    networks:
+      - app-network
+
+  chatbot:
+    build: ../backend/ai_service/chatbot
+    container_name: chatbot
+    ports:
+      - "5000:5000"
+    depends_on:
+      chat_db:
+        condition: service_healthy    
+      # ai_game:
+      #   condition: service_started
+      redis:
+        condition: service_started
+    env_file:
+      - .env
+    # environment:
+    #   GAME_API_URL: http://game-api:5001
+    # volumes:
+    #   - ../backend/ai_service/static:/app/static
+    #   - ../backend/ai_service/templates:/app/templates
+    #   - ../backend/ai_service/uploads:/app/uploads
+    networks:
+      - app-network
+
+  chat-system:
+    build:
+        context: ../backend/chat/backend
+        dockerfile: Dockerfile
+    container_name: chat-system
+    restart: always
+    depends_on:
+      - db
+    ports:
+      - "3000:3000"
+    environment:
+      SECRET_KEY: 'django-insecure-4vkpyy2bkd3(%hi=nhqdr(yx5j71%*zf!o!ej2kfnivhbno!%n'
+      DATABASE_URL: postgres://sayf:1234@db:5432/mydb
+    volumes:
+      - ../backend/chat/backend:/app
+      - /app/node_modules
+    networks:
+      - app-network
+
+  chat_db:
+    image: postgres:15
+    container_name: chat_db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${DB_USER}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+      POSTGRES_DB: ${DB_NAME}
+    ports:
+      - "5433:5432"
+    volumes:
+      - pp_data:/var/lib/postgresql/data
+    networks:
+      - app-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER} -d ${DB_NAME}"]
+      interval: 5s   
+      timeout: 5s      
+      retries: 10       
+
+volumes:
+  pgdata:
+  pp_data:
+  postgres_data:
+    name: postgres_data
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: ${DATA_PATH}
+
+networks:
+  app-network:
+
+
+
+
+
+  
+ 
+    

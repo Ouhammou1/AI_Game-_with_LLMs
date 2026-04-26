@@ -1,0 +1,116 @@
+import redis
+from datetime import datetime, timedelta
+from extensions import db
+from database.models import UserUsage
+
+r = redis.Redis(host="redis", port=6379, decode_responses=True)
+
+LIMIT_PER_MINUTE = 10
+LIMIT_PER_DAY    = 1000
+SYNC_EVERY       = 10
+SAFETY_ZONE      = 50  # always sync when close to daily limit
+
+
+def _seconds_until_midnight():
+    now = datetime.utcnow()
+    tomorrow = (now + timedelta(days=1)).replace(hour=0, minute=0, second=0, microsecond=0)
+    return int((tomorrow - now).total_seconds())
+
+
+def _restore_from_postgres(user_id: str) -> int:
+    """If Redis lost the data, restore daily_count from Postgres."""
+    usage = UserUsage.query.get(user_id)
+    today = datetime.utcnow().date()
+
+    if usage and usage.updated_at and usage.updated_at.date() == today:
+        return usage.daily_count
+    return 0
+
+
+def _sync_to_postgres(user_id: str, daily_count: int):
+    """Write Redis value back to Postgres as backup."""
+    try:
+        usage = UserUsage.query.get(user_id)
+        if not usage:
+            usage = UserUsage(user_id=user_id, daily_count=daily_count)
+            db.session.add(usage)
+        else:
+            usage.daily_count = daily_count
+        usage.updated_at = datetime.utcnow()
+        db.session.commit()
+    except Exception as e:
+        db.session.rollback()
+        print(f"[SYNC ERROR] {e}")
+
+
+def check_rate_limit(user_id: str):
+    minute_key = f"rate:minute:{user_id}"
+    daily_key  = f"rate:daily:{user_id}"
+
+    try:
+        # ---- DAILY COUNT (Redis primary) ----
+        daily_count = r.get(daily_key)
+
+        if daily_count is None:
+            # Redis lost the key (restart, eviction, or first time today)
+            # → restore from Postgres
+            restored = _restore_from_postgres(user_id)
+            r.set(daily_key, restored, ex=_seconds_until_midnight())
+            daily_count = restored
+        else:
+            daily_count = int(daily_count)
+
+        if daily_count >= LIMIT_PER_DAY:
+            return False
+
+        # ---- PER-MINUTE COUNT (Redis only) ----
+        minute_count = r.get(minute_key)
+        if minute_count and int(minute_count) >= LIMIT_PER_MINUTE:
+            return False
+
+        # ---- INCREMENT both counters in Redis ----
+        pipe = r.pipeline()
+        pipe.incr(minute_key)
+        pipe.expire(minute_key, 60)
+        pipe.incr(daily_key)
+        pipe.expire(daily_key, _seconds_until_midnight())
+        results = pipe.execute()
+
+        new_daily = results[2]
+
+        # ---- SYNC TO POSTGRES ----
+        # every N increments OR when close to the daily limit
+        if new_daily % SYNC_EVERY == 0 or new_daily >= LIMIT_PER_DAY - SAFETY_ZONE:
+            _sync_to_postgres(user_id, new_daily)
+
+        return True
+
+    except redis.RedisError as e:
+        print(f"[REDIS DOWN] {e} — falling back to Postgres")
+        return _check_rate_limit_postgres_only(user_id)
+
+
+def _check_rate_limit_postgres_only(user_id: str):
+    """Fallback when Redis is unreachable."""
+    try:
+        usage = UserUsage.query.get(user_id)
+        today = datetime.utcnow().date()
+
+        if not usage:
+            usage = UserUsage(user_id=user_id, daily_count=0, updated_at=datetime.utcnow())
+            db.session.add(usage)
+
+        if usage.updated_at and usage.updated_at.date() != today:
+            usage.daily_count = 0
+
+        if usage.daily_count >= LIMIT_PER_DAY:
+            return False
+
+        usage.daily_count += 1
+        usage.updated_at = datetime.utcnow()
+        db.session.commit()
+        return True
+    except Exception as e:
+        db.session.rollback()
+        print(f"[DB FALLBACK ERROR] {e}")
+        return True

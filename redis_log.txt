@@ -1,0 +1,95 @@
+=== Sat Apr 25 18:51:39 +01 2026 ===
+DAILY:  10
+D-TTL:  22100
+MINUTE: 
+M-TTL:  -2
+=== Sat Apr 25 18:51:40 +01 2026 ===
+DAILY:  10
+D-TTL:  22098
+MINUTE: 
+M-TTL:  -2
+=== Sat Apr 25 18:51:42 +01 2026 ===
+DAILY:  10
+D-TTL:  22097
+MINUTE: 
+M-TTL:  -2
+=== Sat Apr 25 18:51:44 +01 2026 ===
+DAILY:  10
+D-TTL:  22095
+MINUTE: 
+M-TTL:  -2
+=== Sat Apr 25 18:51:45 +01 2026 ===
+DAILY:  10
+D-TTL:  22093
+MINUTE: 
+M-TTL:  -2
+=== Sat Apr 25 18:51:47 +01 2026 ===
+DAILY:  10
+D-TTL:  22092
+MINUTE: 
+M-TTL:  -2
+=== Sat Apr 25 18:51:48 +01 2026 ===
+DAILY:  10
+D-TTL:  22090
+MINUTE: 
+M-TTL:  -2
+=== Sat Apr 25 18:51:50 +01 2026 ===
+DAILY:  10
+D-TTL:  22089
+MINUTE: 
+M-TTL:  -2
+=== Sat Apr 25 18:51:52 +01 2026 ===
+DAILY:  10
+D-TTL:  22087
+MINUTE: 
+M-TTL:  -2
+=== Sat Apr 25 18:51:53 +01 2026 ===
+DAILY:  10
+D-TTL:  22085
+MINUTE: 
+M-TTL:  -2
+=== Sat Apr 25 18:51:55 +01 2026 ===
+DAILY:  10
+D-TTL:  22084
+MINUTE: 
+M-TTL:  -2
+=== Sat Apr 25 18:51:56 +01 2026 ===
+DAILY:  10
+D-TTL:  22082
+MINUTE: 
+M-TTL:  -2
+=== Sat Apr 25 18:51:58 +01 2026 ===
+DAILY:  10
+D-TTL:  22081
+MINUTE: 
+M-TTL:  -2
+=== Sat Apr 25 18:52:00 +01 2026 ===
+DAILY:  10
+D-TTL:  22079
+MINUTE: 
+M-TTL:  -2
+=== Sat Apr 25 18:52:01 +01 2026 ===
+DAILY:  10
+D-TTL:  22077
+MINUTE: 
+M-TTL:  -2
+=== Sat Apr 25 18:52:03 +01 2026 ===
+DAILY:  10
+D-TTL:  22076
+MINUTE: 
+M-TTL:  -2
+=== Sat Apr 25 18:52:05 +01 2026 ===
+DAILY:  10
+D-TTL:  22074
+MINUTE: 
+M-TTL:  -2
+=== Sat Apr 25 18:52:06 +01 2026 ===
+DAILY:  10
+D-TTL:  22072
+MINUTE: 
+M-TTL:  -2
+=== Sat Apr 25 18:52:08 +01 2026 ===
+DAILY:  10
+D-TTL:  22071
+MINUTE: 
+M-TTL:  -2
